@@ -20,6 +20,7 @@
 // When releasing a new version, update the Version constant below.
 package metadata
 
-// Version is the current release version of arazzo-mcp-gen.
-// Update this value before tagging a new release.
-const Version = "v0.1.5"
+// Version is the current version of arazzo-mcp-gen.
+// It defaults to "v1.0.0" locally and is overridden at build time via
+// -ldflags "-X github.com/wso2/arazzo-mcp-generator/internal/metadata.Version=<tag>".
+var Version = "v1.0.0"
