@@ -46,18 +46,21 @@ workflows:
         # Branch based on which status code was returned
         onSuccess:
           - name: petFoundRouteToUpdate
-            condition: $statusCode == 200
+            criteria:
+              - condition: $statusCode == 200
             type: goto
             stepId: updateStep
           - name: petMissingRouteToCreate
-            condition: $statusCode == 404
+            criteria:
+              - condition: $statusCode == 404
             type: goto
             stepId: createStep
 
         # Retry on true server errors
         onFailure:
           - name: retryOnServerError
-            condition: $statusCode >= 500
+            criteria:
+              - condition: $statusCode >= 500
             type: retry
             retryAfter: 5
 
