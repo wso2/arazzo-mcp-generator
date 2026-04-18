@@ -112,8 +112,14 @@ func RunSpectral(filePath string) ([]SpectralDiagnostic, error) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	// Spectral exits with code 1 when it finds errors, so we ignore the exit code
-	cmd.Run()
+	// Spectral exits with code 1 when it finds lint errors — that is expected.
+	// Only treat non-exit-code errors (e.g. binary crash, not found) as hard failures.
+	runErr := cmd.Run()
+	if runErr != nil {
+		if _, isExitErr := runErr.(*exec.ExitError); !isExitErr {
+			return nil, fmt.Errorf("failed to run spectral: %w", runErr)
+		}
+	}
 
 	// Spectral may write extra text after the JSON array (e.g. "No results with
 	// a severity of 'error' found!") — extract just the JSON array portion.
@@ -320,8 +326,7 @@ func supplementStatusCodeWarnings(r *Result, raw map[string]interface{}) {
 			}
 
 			if len(statusChecks) > 1 {
-				path := fmt.Sprintf("workflows[%d].steps[%d].successCriteria", wi, si)
-				_ = wfID // Used above in path context
+				path := fmt.Sprintf("workflows[%d:%s].steps[%d].successCriteria", wi, wfID, si)
 				r.warning("step", path,
 					fmt.Sprintf("Step '%s': multiple $statusCode criteria are AND-ed together "+
 						"(%s) — this may never be satisfied simultaneously",
