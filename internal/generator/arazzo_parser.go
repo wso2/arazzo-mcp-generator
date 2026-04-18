@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 	"unicode"
 
 	"gopkg.in/yaml.v3"
@@ -157,9 +158,15 @@ func ValidateSourceDescriptions(spec *ArazzoSpec, folderPath string) error {
 		}
 		// If the URL is an HTTP/HTTPS URL, check accessibility instead of a local file
 		if strings.HasPrefix(sd.URL, "http://") || strings.HasPrefix(sd.URL, "https://") {
-			resp, err := http.Head(sd.URL)
-			if err != nil || resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			client := &http.Client{Timeout: 10 * time.Second}
+			resp, err := client.Head(sd.URL)
+			if err != nil {
 				missing = append(missing, fmt.Sprintf("  sourceDescriptions[%d]: '%s' (name: '%s') - URL not accessible", i, sd.URL, sd.Name))
+			} else {
+				defer resp.Body.Close()
+				if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+					missing = append(missing, fmt.Sprintf("  sourceDescriptions[%d]: '%s' (name: '%s') - URL not accessible", i, sd.URL, sd.Name))
+				}
 			}
 			continue
 		}
