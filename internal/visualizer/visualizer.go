@@ -142,7 +142,9 @@ func openBrowser(path string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
-		cmd = exec.Command("cmd", "/C", "start", path)
+		// Pass an empty string as the window title so paths with spaces open correctly.
+		// Without it, `start "path with spaces"` treats the quoted arg as the title.
+		cmd = exec.Command("cmd", "/C", "start", "", path)
 	case "darwin":
 		cmd = exec.Command("open", path)
 	default: // linux and *BSDs
@@ -159,10 +161,6 @@ func buildHTML(title, mermaid string) string {
 	if title != "" {
 		pageTitle = title + " — Arazzo Workflow Diagram"
 	}
-
-	// Escape backticks/backslashes for the JS template literal
-	mermaidJS := strings.ReplaceAll(mermaid, "\\", "\\\\")
-	mermaidJS = strings.ReplaceAll(mermaidJS, "`", "\\`")
 
 	return `<!DOCTYPE html>
 <html lang="en">
@@ -216,7 +214,7 @@ func buildHTML(title, mermaid string) string {
     <a href="https://mermaid.live" target="_blank">Open in Mermaid Live Editor</a>
   </footer>
   <script>
-    mermaid.initialize({ startOnLoad: true, theme: 'default', securityLevel: 'loose' });
+    mermaid.initialize({ startOnLoad: true, theme: 'default', securityLevel: 'strict', flowchart: { htmlLabels: false } });
   </script>
 </body>
 </html>`
