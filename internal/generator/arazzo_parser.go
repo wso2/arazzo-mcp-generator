@@ -74,7 +74,7 @@ type InputProperty struct {
 
 // FindArazzoFile scans the given folder for a YAML file that contains the
 // top-level "arazzo" key. Returns the path to the Arazzo file.
-// Returns an error if no Arazzo file is found or if multiple are found.(FIX: add multi arazzo file support)
+// Returns an error if no Arazzo file is found or if multiple are found.
 func FindArazzoFile(folderPath string) (string, error) {
 	entries, err := os.ReadDir(folderPath)
 	if err != nil {
@@ -119,7 +119,7 @@ func isArazzoFile(filePath string) bool {
 		return false
 	}
 
-	_, hasArazzo := raw["arazzo"] //value,isfound := raw["arazzo"]
+	_, hasArazzo := raw["arazzo"]
 	return hasArazzo
 }
 
@@ -187,15 +187,17 @@ func ValidateSourceDescriptions(spec *ArazzoSpec, folderPath string) error {
 
 // ─── Credential Detection ──────────────────────────────────────────────────────
 
-// ClassifiedInputs separates a workflow's inputs into regular params and credentials.
+// ClassifiedInputs separates a workflow's inputs into regular params and
+// inputs that appear to contain credentials or other sensitive values.
 type ClassifiedInputs struct {
-	RegularInputs    map[string]InputProperty // Become MCP tool function parameters
-	CredentialInputs map[string]InputProperty // Read from environment variables
+	RegularInputs    map[string]InputProperty // Non-sensitive workflow inputs
+	CredentialInputs map[string]InputProperty // Inputs identified as credential-like for downstream handling
 }
 
 // IsCredentialInput returns true if the input property name or description suggests
-// it is a credential (API key, token, password, etc.) that should be provided via
-// environment variables rather than MCP tool parameters.
+// it contains a credential or other sensitive value (API key, token, password, etc.).
+// This function only classifies inputs; it does not determine how generated code
+// ultimately supplies or exposes those inputs.
 func IsCredentialInput(name string, prop InputProperty) bool {
 	// Check the property name (case-insensitive)
 	lowerName := strings.ToLower(name)
