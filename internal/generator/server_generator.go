@@ -192,14 +192,21 @@ func arazzoTypeToPython(t string) string {
 	}
 }
 
+// sanitizeDocstring escapes characters that would break a Python triple-quoted string.
+func sanitizeDocstring(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"""`, `\"\"\"`)
+	return s
+}
+
 // workflowDocstring returns the docstring for a workflow tool function.
 // DEPRECATED: Use workflowDocstringWithAuth for new code.
 func workflowDocstring(wf Workflow) string {
 	if wf.Summary != "" {
-		return wf.Summary
+		return sanitizeDocstring(wf.Summary)
 	}
 	if wf.Description != "" {
-		return wf.Description
+		return sanitizeDocstring(wf.Description)
 	}
 	return fmt.Sprintf("Execute the %s workflow", wf.WorkflowID)
 }
@@ -220,8 +227,7 @@ func workflowDocstringWithAuth(wf Workflow, classified ClassifiedInputs) string 
 	sort.Strings(credParamNames)
 
 	authNote := fmt.Sprintf("\n\n    IMPORTANT: This tool requires authentication. "+
-		"Please provide your WSO2 access token in the %s parameter. "+
-		"If the user does not have a token, ask them to generate one from the WSO2 API Manager Developer Portal (devportal).",
+		"Please provide your credentials via the %s parameter(s).",
 		strings.Join(credParamNames, " and "))
 
 	return base + authNote
@@ -344,13 +350,14 @@ func toPythonParamName(name string) string {
 }
 
 // buildAllParams generates the Python function parameter list including both
-// regular inputs (names used as-is) and credential inputs (names converted to
-// valid Python identifiers via toPythonParamName). All params become str/int/etc.
+// regular inputs and credential inputs. Both are normalized through toPythonParamName
+// to guarantee valid Python identifiers.
 func buildAllParams(regular map[string]InputProperty, credentials map[string]InputProperty) string {
 	var parts []string
 	for name, prop := range regular {
+		pyName := toPythonParamName(name)
 		pyType := arazzoTypeToPython(prop.Type)
-		parts = append(parts, fmt.Sprintf("%s: %s", name, pyType))
+		parts = append(parts, fmt.Sprintf("%s: %s", pyName, pyType))
 	}
 	for name, prop := range credentials {
 		pyName := toPythonParamName(name)
@@ -362,13 +369,13 @@ func buildAllParams(regular map[string]InputProperty, credentials map[string]Inp
 }
 
 // buildAllInputDict generates the Python dict literal for execute_workflow(),
-// mapping each original Arazzo input name to its Python variable name.
-// Regular inputs use their original name as-is (e.g. "petId": petId).
-// Credential inputs use the converted Python name (e.g. "internalKey": internal_key).
+// mapping each original Arazzo input name to its normalized Python variable name.
+// Both regular and credential inputs are normalized via toPythonParamName.
 func buildAllInputDict(regular map[string]InputProperty, credentials map[string]InputProperty) string {
 	var parts []string
 	for name := range regular {
-		parts = append(parts, fmt.Sprintf("%q: %s", name, name))
+		pyName := toPythonParamName(name)
+		parts = append(parts, fmt.Sprintf("%q: %s", name, pyName))
 	}
 	for name := range credentials {
 		pyName := toPythonParamName(name)
