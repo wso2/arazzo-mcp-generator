@@ -9,16 +9,15 @@
 1. [What It Does](#what-it-does)
 2. [Prerequisites](#prerequisites)
 3. [Installation](#installation)
-4. [Quick Start](#quick-start)
-5. [Commands](#commands)
+4. [Commands](#commands)
    - [sample](#sample)
    - [validate](#validate)
    - [inspect](#inspect)
    - [visualize](#visualize)
    - [mcp-server generate](#mcp-server-generate)
-6. [User Scenario: End-to-End Walkthrough](#user-scenario-end-to-end-walkthrough)
-7. [Generated Artifacts](#generated-artifacts)
-8. [License](#license)
+5. [User Scenario: End-to-End Walkthrough](#user-scenario-end-to-end-walkthrough)
+6. [Generated Artifacts](#generated-artifacts)
+7. [License](#license)
 
 ---
 
@@ -149,7 +148,7 @@ arazzo-mcp-gen sample my-api-project
 
 What it creates:
 
-```
+```text
 my-api-project/
 └── petstore_workflow.yaml   ← sample Arazzo spec targeting Petstore v3
 ```
@@ -366,7 +365,7 @@ Create a folder containing your Arazzo specification and its referenced OpenAPI 
 2. Save your Arazzo file (e.g., `petstore_workflow.yaml`) inside it.
 3. Ensure all OpenAPI `.yaml` files referenced in the Arazzo spec are also in this folder.
 
-```
+```text
 pet-project/
 ├── petstore_workflow.yaml   ← Your Arazzo spec
 └── petstore_openapi.yaml    ← Your OpenAPI spec
@@ -379,7 +378,7 @@ arazzo-mcp-gen validate -d .
 ```
 
 **Expected output (Spectral available):**
-```
+```text
 Validating: /path/to/pet-project/petstore_workflow.yaml
 ────────────────────────────────────────────────────────────
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -425,7 +424,7 @@ arazzo-mcp-gen mcp-server generate -d . -p 5000 -o ./artifacts
 ```
 
 **Expected output:**
-```
+```text
 Validating input folder...
 Found Arazzo spec: Pet Upsert Workflow (V3) with 1 workflow(s)
 Generating MCP server code...
@@ -480,7 +479,7 @@ The AI agent can now call your Arazzo workflows as tools. The tool executes the 
 
 Inspect with `--output` / `-o ./artifacts`:
 
-```
+```text
 artifacts/
 ├── mcp_server.py     ← FastMCP server; each workflow = @mcp.tool()
 ├── Dockerfile        ← python:3.11-slim image; EXPOSEs your port
