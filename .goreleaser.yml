@@ -14,7 +14,8 @@ builds:
     env:
       - CGO_ENABLED=0 #env variables to be set
     ldflags:
-      - -X github.com/wso2/arazzo-mcp-generator/cmd.Version={{.Version}}
+      - -X
+        github.com/wso2/arazzo-mcp-generator/internal/metadata.Version={{.Version}}
     goos:
       - darwin
       - linux
