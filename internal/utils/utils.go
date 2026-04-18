@@ -84,12 +84,12 @@ func CopyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 
 	if _, err = io.Copy(out, in); err != nil {
+		out.Close()
 		return err
 	}
-	return nil
+	return out.Close()
 }
 
 // PrintBoxedMessage prints a message in a box with borders
