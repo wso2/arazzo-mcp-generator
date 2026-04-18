@@ -93,8 +93,11 @@ func runInspectCommand() error {
 		if err != nil {
 			return fmt.Errorf("failed to resolve file path: %w", err)
 		}
-		if _, err := os.Stat(abs); os.IsNotExist(err) {
-			return fmt.Errorf("file does not exist: %s", abs)
+		if _, err := os.Stat(abs); err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("file does not exist: %s", abs)
+			}
+			return fmt.Errorf("failed to access file: %w", err)
 		}
 		filePath = abs
 	} else {
