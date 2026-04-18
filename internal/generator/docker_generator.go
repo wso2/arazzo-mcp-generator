@@ -103,9 +103,15 @@ func BuildMCPServerImage(config MCPServerBuildConfig) error {
 
 	// Step 3: Create arazzo/ subdirectory and copy spec files into it.
 	// Exclude the build directory itself to prevent infinite recursion when
-	// the output directory is inside the source folder.
+	// the output directory is inside the source folder, and exclude .git/
+	// and .github/ so version-control internals are not baked into the image.
 	arazzoDir := filepath.Join(buildDir, "arazzo")
-	if err := utils.CopyDir(config.FolderPath, arazzoDir, buildDir); err != nil {
+	excludeDirs := []string{
+		buildDir,
+		filepath.Join(config.FolderPath, ".git"),
+		filepath.Join(config.FolderPath, ".github"),
+	}
+	if err := utils.CopyDir(config.FolderPath, arazzoDir, excludeDirs...); err != nil {
 		return fmt.Errorf("failed to copy spec files to build context: %w", err)
 	}
 
