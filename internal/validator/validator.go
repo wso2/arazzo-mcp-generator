@@ -387,9 +387,15 @@ func probeURL(url string) error {
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Head(url)
 	if err != nil {
+		if resp != nil {
+			resp.Body.Close()
+		}
 		// Retry with GET — some servers block HEAD
 		resp, err = client.Get(url)
 		if err != nil {
+			if resp != nil {
+				resp.Body.Close()
+			}
 			return err
 		}
 	}
@@ -483,7 +489,7 @@ func validateWorkflowInputs(r *Result, wf map[string]interface{}, path, wfID str
 	}
 
 	props := getMap(inputs, "properties")
-	if props == nil || len(props) == 0 {
+	if len(props) == 0 {
 		r.warning("workflow", path+".inputs",
 			fmt.Sprintf("Workflow '%s' has inputs but no properties defined", wfID))
 		return
@@ -863,7 +869,7 @@ func validateWorkflowOutputs(r *Result, wf map[string]interface{}, path string,
 		// Check $steps.xxx references
 		if strings.HasPrefix(exprStr, "$steps.") {
 			parts := strings.SplitN(exprStr, ".", 4)
-			if len(parts) >= 2 {
+			if len(parts) >= 2 && parts[1] != "" {
 				refStepID := parts[1]
 				if !stepIDs[refStepID] {
 					r.errorf("expression", path+".outputs."+name,
