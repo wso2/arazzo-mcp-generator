@@ -68,7 +68,7 @@ func GenerateDockerfile(port int) string {
 func BuildMCPServerImage(config MCPServerBuildConfig) error {
 	// Step 1: Check Docker availability
 	if err := utils.IsDockerAvailable(); err != nil {
-		return fmt.Errorf("Docker is not available or not running: %w\n\nPlease install and start Docker before running this command", err)
+		return fmt.Errorf("%w\n\nPlease install and start Docker before running this command", err)
 	}
 
 	// Step 2: Determine build directory
@@ -106,12 +106,16 @@ func BuildMCPServerImage(config MCPServerBuildConfig) error {
 	// the output directory is inside the source folder, and exclude .git/
 	// and .github/ so version-control internals are not baked into the image.
 	arazzoDir := filepath.Join(buildDir, "arazzo")
-	excludeDirs := []string{
-		buildDir,
-		filepath.Join(config.FolderPath, ".git"),
-		filepath.Join(config.FolderPath, ".github"),
+	absFolderPath, err := filepath.Abs(config.FolderPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve source folder path: %w", err)
 	}
-	if err := utils.CopyDir(config.FolderPath, arazzoDir, excludeDirs...); err != nil {
+	excludeDirs := []string{
+		filepath.Clean(buildDir),
+		filepath.Join(absFolderPath, ".git"),
+		filepath.Join(absFolderPath, ".github"),
+	}
+	if err := utils.CopyDir(absFolderPath, arazzoDir, excludeDirs...); err != nil {
 		return fmt.Errorf("failed to copy spec files to build context: %w", err)
 	}
 
