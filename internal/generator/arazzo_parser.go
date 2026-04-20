@@ -202,17 +202,57 @@ type ClassifiedInputs struct {
 // it contains a credential or other sensitive value (API key, token, password, etc.).
 // This function only classifies inputs; it does not determine how generated code
 // ultimately supplies or exposes those inputs.
-func IsCredentialInput(name string, prop InputProperty) bool {
-	// Check the property name (case-insensitive)
-	lowerName := strings.ToLower(name)
-	nameKeywords := []string{
-		"key", "token", "password", "secret", "auth",
-		"credential", "apikey", "api_key", "bearer",
-		"authorization", "client_id", "clientid",
-		"client_secret", "clientsecret",
+// credentialTerms is the set of lowercase word-tokens and compound-token pairs
+// that indicate a credential input. Checked against whole tokens only (never as
+// substrings) so names like "monkeyId" or "authorId" are not false-positives.
+var credentialTerms = map[string]bool{
+	"key": true, "token": true, "password": true, "secret": true,
+	"auth": true, "authentication": true, "authorization": true,
+	"credential": true, "credentials": true, "bearer": true,
+	// compound pairs (also checked as a single token for un-split identifiers)
+	"apikey": true, "clientid": true, "clientsecret": true,
+}
+
+// nameTokens splits a camelCase/snake_case/kebab-case identifier into lowercase
+// word tokens by splitting on non-alphanumeric separators and camelCase boundaries.
+func nameTokens(s string) []string {
+	var tokens []string
+	var cur strings.Builder
+	runes := []rune(s)
+	for i, r := range runes {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			if cur.Len() > 0 {
+				tokens = append(tokens, strings.ToLower(cur.String()))
+				cur.Reset()
+			}
+		} else if i > 0 && unicode.IsUpper(r) && unicode.IsLower(runes[i-1]) {
+			tokens = append(tokens, strings.ToLower(cur.String()))
+			cur.Reset()
+			cur.WriteRune(r)
+		} else {
+			cur.WriteRune(r)
+		}
 	}
-	for _, keyword := range nameKeywords {
-		if strings.Contains(lowerName, keyword) {
+	if cur.Len() > 0 {
+		tokens = append(tokens, strings.ToLower(cur.String()))
+	}
+	return tokens
+}
+
+func IsCredentialInput(name string, prop InputProperty) bool {
+	// Tokenize the name on non-alphanumeric separators and camelCase boundaries,
+	// then match whole tokens (and adjacent-token compounds) against known credential
+	// terms. This avoids false positives like "key" inside "monkeyId" or "auth"
+	// inside "authorId".
+	tokens := nameTokens(name)
+	for _, t := range tokens {
+		if credentialTerms[t] {
+			return true
+		}
+	}
+	// Also check each adjacent pair as a compound (e.g. clientId → "clientid").
+	for i := 0; i < len(tokens)-1; i++ {
+		if credentialTerms[tokens[i]+tokens[i+1]] {
 			return true
 		}
 	}
