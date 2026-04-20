@@ -529,8 +529,12 @@ func sanitizeID(s string) string {
 // trunc shortens s to at most n characters, replacing the tail with "…".
 func trunc(s string, n int) string {
 	s = strings.ReplaceAll(s, "\n", " ")
-	if len(s) > n {
-		return s[:n-1] + "…"
+	runes := []rune(s)
+	if len(runes) > n {
+		if n <= 1 {
+			return "…"
+		}
+		return string(runes[:n-1]) + "…"
 	}
 	return s
 }

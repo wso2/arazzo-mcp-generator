@@ -157,14 +157,15 @@ func GenerateServerCode(spec *ArazzoSpec, arazzoFileName string, port int) (stri
 
 // camelToSnake converts a camelCase or PascalCase string to snake_case.
 func camelToSnake(s string) string {
+	runes := []rune(s)
 	var result strings.Builder
-	for i, r := range s {
+	for i, r := range runes {
 		if unicode.IsUpper(r) {
 			if i > 0 {
-				prev := rune(s[i-1])
+				prev := runes[i-1]
 				if unicode.IsLower(prev) || unicode.IsDigit(prev) {
 					result.WriteRune('_')
-				} else if unicode.IsUpper(prev) && i+1 < len(s) && unicode.IsLower(rune(s[i+1])) {
+				} else if unicode.IsUpper(prev) && i+1 < len(runes) && unicode.IsLower(runes[i+1]) {
 					result.WriteRune('_')
 				}
 			}
