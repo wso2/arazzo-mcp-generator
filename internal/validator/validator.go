@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -261,13 +262,22 @@ func ValidateFile(filePath string, folderPath string, checkRemote bool) *Result 
 		r.errorf("structure", "arazzo", "Missing top-level 'arazzo' key — not an Arazzo specification")
 		return r
 	}
-	// arazzo version can be a float (1.0) or string ("1.0.1") depending on YAML parsing
-	arazzoVersion := fmt.Sprintf("%v", arazzoRaw)
-	if strings.HasPrefix(arazzoVersion, "1.0") {
+	// arazzo version can be a float or string depending on YAML parsing.
+	// Only exact versions 1.0.0 and 1.0.1 are valid.
+	var arazzoVersion string
+	switch v := arazzoRaw.(type) {
+	case float64:
+		arazzoVersion = strconv.FormatFloat(v, 'f', -1, 64)
+	case string:
+		arazzoVersion = v
+	default:
+		arazzoVersion = fmt.Sprintf("%v", arazzoRaw)
+	}
+	if arazzoVersion == "1.0.0" || arazzoVersion == "1.0.1" {
 		r.pass("structure", "arazzo", fmt.Sprintf("Arazzo version: %s", arazzoVersion))
 	} else {
 		r.warning("structure", "arazzo",
-			fmt.Sprintf("Version '%s' may not be fully supported (expected 1.0.x)", arazzoVersion))
+			fmt.Sprintf("Version '%s' is not supported; expected exactly 1.0.0 or 1.0.1", arazzoVersion))
 	}
 
 	// ── 4. Info ─────────────────────────────────────────────────────────────
@@ -692,12 +702,18 @@ func validateSuccessCriteria(r *Result, step map[string]interface{}, path, stepI
 		}
 
 		// Basic expression syntax check
-		if !isValidConditionExpression(cond) {
-			r.warning("step", cPath,
-				fmt.Sprintf("Step '%s': condition '%s' may have invalid syntax", stepID, cond))
+		condType := getString(c, "type")
+		if condType == "" || condType == "simple" {
+			if !isValidConditionExpression(cond) {
+				r.warning("step", cPath,
+					fmt.Sprintf("Step '%s': condition '%s' may have invalid syntax", stepID, cond))
+			} else {
+				r.pass("step", cPath,
+					fmt.Sprintf("Step '%s': successCriteria: %s", stepID, cond))
+			}
 		} else {
 			r.pass("step", cPath,
-				fmt.Sprintf("Step '%s': successCriteria: %s", stepID, cond))
+				fmt.Sprintf("Step '%s': successCriteria (%s): %s", stepID, condType, cond))
 		}
 
 		// Track $statusCode checks for conflict detection
@@ -815,13 +831,21 @@ func validateActions(r *Result, step map[string]interface{}, actionKey string,
 					r.errorf("step", cPath,
 						fmt.Sprintf("Step '%s': action '%s' criteria entry missing 'condition'",
 							stepID, name))
-				} else if !isValidConditionExpression(cond) {
-					r.warning("step", cPath,
-						fmt.Sprintf("Step '%s': action criteria '%s' may have invalid syntax",
-							stepID, cond))
 				} else {
-					r.pass("step", cPath,
-						fmt.Sprintf("Step '%s': action '%s' criteria: %s", stepID, name, cond))
+					condType := getString(c, "type")
+					if condType == "" || condType == "simple" {
+						if !isValidConditionExpression(cond) {
+							r.warning("step", cPath,
+								fmt.Sprintf("Step '%s': action criteria '%s' may have invalid syntax",
+									stepID, cond))
+						} else {
+							r.pass("step", cPath,
+								fmt.Sprintf("Step '%s': action '%s' criteria: %s", stepID, name, cond))
+						}
+					} else {
+						r.pass("step", cPath,
+							fmt.Sprintf("Step '%s': action '%s' criteria (%s): %s", stepID, name, condType, cond))
+					}
 				}
 			}
 		}
