@@ -244,75 +244,6 @@ func hasRemoteSourceDescriptions(spec *ArazzoSpec) bool {
 	return false
 }
 
-// buildParams generates the Python function parameter list from workflow inputs.
-// e.g. "pet_id: int, pet_name: str"
-// DEPRECATED: Use buildParamsFromMap for new code that separates credentials.
-func buildParams(wf Workflow) string { //what are the inputs
-	if wf.Inputs == nil || len(wf.Inputs.Properties) == 0 {
-		return ""
-	}
-
-	var parts []string
-	for name, prop := range wf.Inputs.Properties {
-		pyType := arazzoTypeToPython(prop.Type)
-		parts = append(parts, fmt.Sprintf("%s: %s", name, pyType))
-	}
-	sort.Strings(parts)
-	return strings.Join(parts, ", ")
-}
-
-// buildParamsFromMap generates Python function parameters from the regular inputs only.
-// Credential inputs are excluded because they come from environment variables.
-func buildParamsFromMap(inputs map[string]InputProperty) string {
-	if len(inputs) == 0 {
-		return ""
-	}
-	var parts []string
-	for name, prop := range inputs {
-		pyType := arazzoTypeToPython(prop.Type)
-		parts = append(parts, fmt.Sprintf("%s: %s", name, pyType))
-	}
-	sort.Strings(parts)
-	return strings.Join(parts, ", ")
-}
-
-// buildInputDict generates the Python dict literal mapping original param names
-// to their snake_case function argument names.
-// e.g. `"petId": pet_id, "petName": pet_name`
-// DEPRECATED: Use buildInputDictWithCredentials for new code.
-func buildInputDict(wf Workflow) string { //actial values for the inputs
-	if wf.Inputs == nil || len(wf.Inputs.Properties) == 0 {
-		return ""
-	}
-
-	var parts []string
-	for name := range wf.Inputs.Properties {
-		parts = append(parts, fmt.Sprintf("%q: %s", name, name))
-	}
-	sort.Strings(parts)
-	return strings.Join(parts, ", ")
-}
-
-// buildInputDictWithCredentials generates the Python dict literal for execute_workflow(),
-// combining regular param references (function args) with credential env var references.
-// e.g. `"petId": petId, "apiKey": PETSTORE_API_API_KEY`
-func buildInputDictWithCredentials(
-	regular map[string]InputProperty,
-	credentials map[string]InputProperty,
-	specTitle string,
-) string {
-	var parts []string
-	for name := range regular {
-		parts = append(parts, fmt.Sprintf("%q: %s", name, name))
-	}
-	for name := range credentials {
-		envVar := CredentialEnvVarName(specTitle, name)
-		parts = append(parts, fmt.Sprintf("%q: %s", name, envVar))
-	}
-	sort.Strings(parts)
-	return strings.Join(parts, ", ")
-}
-
 // toPythonParamName converts any input name to a valid Python parameter name using camelCase.
 // Handles kebab-case (Internal-Key → internalKey) and other non-identifier characters.
 func toPythonParamName(name string) string {
@@ -384,14 +315,4 @@ func buildAllInputDict(regular map[string]InputProperty, credentials map[string]
 	}
 	sort.Strings(parts)
 	return strings.Join(parts, ", ")
-}
-
-// sortedKeys returns the keys of a map sorted alphabetically.
-func sortedKeys[V any](m map[string]V) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }
