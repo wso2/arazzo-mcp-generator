@@ -163,18 +163,22 @@ func ValidateSourceDescriptions(spec *ArazzoSpec, folderPath string) error {
 			if err != nil {
 				missing = append(missing, fmt.Sprintf("  sourceDescriptions[%d]: '%s' (name: '%s') - URL not accessible", i, sd.URL, sd.Name))
 			} else {
-				defer resp.Body.Close()
 				if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 					missing = append(missing, fmt.Sprintf("  sourceDescriptions[%d]: '%s' (name: '%s') - URL not accessible", i, sd.URL, sd.Name))
 				}
+				resp.Body.Close()
 			}
 			continue
 		}
 
 		// Resolve the URL relative to the folder
 		resolvedPath := filepath.Join(folderPath, sd.URL)
-		if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
-			missing = append(missing, fmt.Sprintf("  sourceDescriptions[%d]: '%s' (name: '%s')", i, sd.URL, sd.Name))
+		if _, err := os.Stat(resolvedPath); err != nil {
+			if os.IsNotExist(err) {
+				missing = append(missing, fmt.Sprintf("  sourceDescriptions[%d]: '%s' (name: '%s')", i, sd.URL, sd.Name))
+			} else {
+				return fmt.Errorf("failed to check source file '%s': %w", resolvedPath, err)
+			}
 		}
 	}
 
@@ -266,14 +270,15 @@ func CredentialEnvVarName(specTitle string, inputName string) string {
 
 // camelToSnakeUpper converts camelCase to UPPER_SNAKE_CASE.
 func camelToSnakeUpper(s string) string {
+	runes := []rune(s)
 	var result strings.Builder
-	for i, r := range s {
+	for i, r := range runes {
 		if unicode.IsUpper(r) {
 			if i > 0 {
-				prev := rune(s[i-1])
+				prev := runes[i-1]
 				if unicode.IsLower(prev) || unicode.IsDigit(prev) {
 					result.WriteRune('_')
-				} else if unicode.IsUpper(prev) && i+1 < len(s) && unicode.IsLower(rune(s[i+1])) {
+				} else if unicode.IsUpper(prev) && i+1 < len(runes) && unicode.IsLower(runes[i+1]) {
 					result.WriteRune('_')
 				}
 			}
