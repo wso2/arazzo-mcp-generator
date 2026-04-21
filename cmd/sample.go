@@ -41,6 +41,7 @@ sourceDescriptions:
 workflows:
   - workflowId: ensurePetExistsV3
     summary: Check if a pet exists by ID; update its name if found, create it if not.
+    description: This workflow demonstrates conditional logic based on API responses. It first checks if a pet with the given ID exists. If it does, it updates the pet's name. If it doesn't, it creates a new pet with the provided ID and name.
     inputs:
       type: object
       properties:
@@ -59,7 +60,6 @@ workflows:
         # Both 200 and 404 are expected/valid responses - treat both as success
         successCriteria:
           - condition: $statusCode == 200
-          - condition: $statusCode == 404
 
         # Branch based on which status code was returned
         onSuccess:
@@ -68,11 +68,6 @@ workflows:
               - condition: $statusCode == 200
             type: goto
             stepId: updateStep
-          - name: petMissingRouteToCreate
-            criteria:
-              - condition: $statusCode == 404
-            type: goto
-            stepId: createStep
 
         # Retry on true server errors
         onFailure:
