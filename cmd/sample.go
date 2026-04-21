@@ -57,7 +57,6 @@ workflows:
             in: path
             value: $inputs.petId
 
-        # Both 200 and 404 are expected/valid responses - treat both as success
         successCriteria:
           - condition: $statusCode == 200
 
