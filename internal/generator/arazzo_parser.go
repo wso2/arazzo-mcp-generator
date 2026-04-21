@@ -158,15 +158,8 @@ func ValidateSourceDescriptions(spec *ArazzoSpec, folderPath string) error {
 		}
 		// If the URL is an HTTP/HTTPS URL, check accessibility instead of a local file
 		if strings.HasPrefix(sd.URL, "http://") || strings.HasPrefix(sd.URL, "https://") {
-			client := &http.Client{Timeout: 10 * time.Second}
-			resp, err := client.Head(sd.URL)
-			if err != nil {
-				missing = append(missing, fmt.Sprintf("  sourceDescriptions[%d]: '%s' (name: '%s') - URL not accessible", i, sd.URL, sd.Name))
-			} else {
-				if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-					missing = append(missing, fmt.Sprintf("  sourceDescriptions[%d]: '%s' (name: '%s') - URL not accessible", i, sd.URL, sd.Name))
-				}
-				resp.Body.Close()
+			if err := probeSourceURL(sd.URL); err != nil {
+				missing = append(missing, fmt.Sprintf("  sourceDescriptions[%d]: '%s' (name: '%s') - URL not accessible: %v", i, sd.URL, sd.Name, err))
 			}
 			continue
 		}
@@ -328,4 +321,31 @@ func camelToSnakeUpper(s string) string {
 		}
 	}
 	return result.String()
+}
+
+// probeSourceURL checks whether a remote URL is accessible by issuing a HEAD
+// request and, if that fails or returns an error, retrying with GET.
+// This mirrors the same logic used by the built-in validator so both paths
+// behave consistently and servers that reject HEAD are handled correctly.
+func probeSourceURL(url string) error {
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Head(url)
+	if err != nil {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		// Retry with GET — some servers block HEAD
+		resp, err = client.Get(url)
+		if err != nil {
+			if resp != nil {
+				resp.Body.Close()
+			}
+			return err
+		}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	return nil
 }
