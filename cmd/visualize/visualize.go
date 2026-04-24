@@ -16,7 +16,7 @@
  * under the License.
  */
 
-package cmd
+package visualize
 
 import (
 	"fmt"
@@ -84,7 +84,11 @@ func init() {
 		"Path to a single Arazzo specification file")
 	visualizeCmd.Flags().StringVarP(&vizOutput, "output", "o", "",
 		"Output file path (.md wraps in fences, .mmd writes raw Mermaid)")
-	rootCmd.AddCommand(visualizeCmd)
+}
+
+// Register adds the visualize command to the given parent command.
+func Register(root *cobra.Command) {
+	root.AddCommand(visualizeCmd)
 }
 
 func runVisualizeCommand() error {
