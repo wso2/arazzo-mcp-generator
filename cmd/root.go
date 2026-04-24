@@ -25,7 +25,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/wso2/arazzo-mcp-generator/cmd/inspect"
 	mcpserver "github.com/wso2/arazzo-mcp-generator/cmd/mcp_server"
-	"github.com/wso2/arazzo-mcp-generator/cmd/sample"
 	"github.com/wso2/arazzo-mcp-generator/cmd/validate"
 	"github.com/wso2/arazzo-mcp-generator/cmd/visualize"
 	"github.com/wso2/arazzo-mcp-generator/internal/metadata"
@@ -43,7 +42,6 @@ func init() {
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	mcpserver.Register(rootCmd)
 	inspect.Register(rootCmd)
-	sample.Register(rootCmd)
 	validate.Register(rootCmd)
 	visualize.Register(rootCmd)
 }
