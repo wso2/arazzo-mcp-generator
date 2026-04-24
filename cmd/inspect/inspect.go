@@ -28,16 +28,13 @@ import (
 	"github.com/wso2/arazzo-mcp-generator/internal/inspector"
 )
 
-const InspectCmdExample = `# Inspect an Arazzo spec folder (auto-detects the Arazzo file)
-arazzo-mcp-gen inspect -d ./my-arazzo-folder
+const InspectCmdExample = `# Inspect a folder (auto-detects the Arazzo file)
+arazzo-mcp-gen inspect -f ./my-arazzo-folder
 
 # Inspect a single Arazzo file directly
 arazzo-mcp-gen inspect -f ./workflow.yaml`
 
-var (
-	inspectFolder string
-	inspectFile   string
-)
+var inspectPath string
 
 var inspectCmd = &cobra.Command{
 	Use:   "inspect",
@@ -68,10 +65,8 @@ Output includes:
 }
 
 func init() {
-	inspectCmd.Flags().StringVarP(&inspectFolder, "folder", "d", "",
-		"Path to folder containing Arazzo and OpenAPI spec files")
-	inspectCmd.Flags().StringVarP(&inspectFile, "file", "f", "",
-		"Path to a single Arazzo specification file")
+	inspectCmd.Flags().StringVarP(&inspectPath, "file", "f", "",
+		"Path to an Arazzo file or folder containing Arazzo and OpenAPI spec files")
 }
 
 // Register adds the inspect command to the given parent command.
@@ -80,50 +75,34 @@ func Register(root *cobra.Command) {
 }
 
 func runInspectCommand() error {
-	if inspectFolder == "" && inspectFile == "" {
-		return fmt.Errorf("either --folder (-d) or --file (-f) must be specified\n\n" +
+	if inspectPath == "" {
+		return fmt.Errorf("-f flag is required\n\n" +
 			"Examples:\n" +
-			"  arazzo-mcp-gen inspect -d ./my-arazzo-folder\n" +
+			"  arazzo-mcp-gen inspect -f ./my-arazzo-folder\n" +
 			"  arazzo-mcp-gen inspect -f ./workflow.yaml")
 	}
-	if inspectFolder != "" && inspectFile != "" {
-		return fmt.Errorf("cannot use both --folder (-d) and --file (-f) at the same time")
+
+	abs, err := filepath.Abs(inspectPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve path: %w", err)
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("path does not exist: %s", abs)
+		}
+		return fmt.Errorf("failed to access path: %w", err)
 	}
 
 	var filePath string
-
-	if inspectFile != "" {
-		abs, err := filepath.Abs(inspectFile)
-		if err != nil {
-			return fmt.Errorf("failed to resolve file path: %w", err)
-		}
-		if _, err := os.Stat(abs); err != nil {
-			if os.IsNotExist(err) {
-				return fmt.Errorf("file does not exist: %s", abs)
-			}
-			return fmt.Errorf("failed to access file: %w", err)
-		}
-		filePath = abs
-	} else {
-		abs, err := filepath.Abs(inspectFolder)
-		if err != nil {
-			return fmt.Errorf("failed to resolve folder path: %w", err)
-		}
-		info, err := os.Stat(abs)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return fmt.Errorf("folder does not exist: %s", abs)
-			}
-			return fmt.Errorf("failed to access folder: %w", err)
-		}
-		if !info.IsDir() {
-			return fmt.Errorf("path is not a directory: %s", abs)
-		}
+	if info.IsDir() {
 		found, err := generator.FindArazzoFile(abs)
 		if err != nil {
 			return err
 		}
 		filePath = found
+	} else {
+		filePath = abs
 	}
 
 	return inspector.Inspect(filePath)

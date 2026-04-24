@@ -29,21 +29,20 @@ import (
 	"github.com/wso2/arazzo-mcp-generator/internal/validator"
 )
 
-const ValidateCmdExample = `# Validate an Arazzo spec folder (auto-detects the Arazzo file)
-arazzo-mcp-gen validate -d ./my-arazzo-folder
+const ValidateCmdExample = `# Validate a folder (auto-detects the Arazzo file)
+arazzo-mcp-gen validate -f ./my-arazzo-folder
 
 # Validate a single Arazzo file
 arazzo-mcp-gen validate -f ./workflow.yaml
 
 # Validate and also check that remote source URLs are accessible
-arazzo-mcp-gen validate -d ./my-arazzo-folder --check-remote
+arazzo-mcp-gen validate -f ./my-arazzo-folder --check-remote
 
 # Treat warnings as errors (useful for CI pipelines)
-arazzo-mcp-gen validate -d ./my-arazzo-folder --strict`
+arazzo-mcp-gen validate -f ./my-arazzo-folder --strict`
 
 var (
-	validateFolder      string
-	validateFile        string
+	validatePath        string
 	validateCheckRemote bool
 	validateStrict      bool
 )
@@ -86,10 +85,8 @@ Use --strict to treat warnings as errors (non-zero exit code on warnings).`,
 }
 
 func init() {
-	validateCmd.Flags().StringVarP(&validateFolder, "folder", "d", "",
-		"Path to folder containing Arazzo and OpenAPI spec files")
-	validateCmd.Flags().StringVarP(&validateFile, "file", "f", "",
-		"Path to a single Arazzo specification file")
+	validateCmd.Flags().StringVarP(&validatePath, "file", "f", "",
+		"Path to an Arazzo file or folder containing Arazzo and OpenAPI spec files")
 	validateCmd.Flags().BoolVar(&validateCheckRemote, "check-remote", false,
 		"Check that remote source description URLs are accessible")
 	validateCmd.Flags().BoolVar(&validateStrict, "strict", false,
@@ -102,55 +99,38 @@ func Register(root *cobra.Command) {
 }
 
 func runValidateCommand() error {
-	// Determine what to validate
-	if validateFolder == "" && validateFile == "" {
-		return fmt.Errorf("either --folder (-d) or --file (-f) must be specified\n\n" +
+	if validatePath == "" {
+		return fmt.Errorf("-f flag is required\n\n" +
 			"Examples:\n" +
-			"  arazzo-mcp-gen validate -d ./my-arazzo-folder\n" +
+			"  arazzo-mcp-gen validate -f ./my-arazzo-folder\n" +
 			"  arazzo-mcp-gen validate -f ./workflow.yaml")
 	}
 
-	if validateFolder != "" && validateFile != "" {
-		return fmt.Errorf("cannot use both --folder (-d) and --file (-f) at the same time")
+	abs, err := filepath.Abs(validatePath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve path: %w", err)
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("path does not exist: %s", abs)
+		}
+		return fmt.Errorf("failed to access path: %w", err)
 	}
 
 	var filePath string
 	var folderPath string
 
-	if validateFile != "" {
-		// Validate a single file
-		absFile, err := filepath.Abs(validateFile)
-		if err != nil {
-			return fmt.Errorf("failed to resolve file path: %w", err)
-		}
-		if _, err := os.Stat(absFile); os.IsNotExist(err) {
-			return fmt.Errorf("file does not exist: %s", absFile)
-		}
-		filePath = absFile
-		folderPath = filepath.Dir(absFile)
-	} else {
-		// Find Arazzo file in folder
-		absFolder, err := filepath.Abs(validateFolder)
-		if err != nil {
-			return fmt.Errorf("failed to resolve folder path: %w", err)
-		}
-		info, err := os.Stat(absFolder)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return fmt.Errorf("folder does not exist: %s", absFolder)
-			}
-			return fmt.Errorf("failed to access folder: %w", err)
-		}
-		if !info.IsDir() {
-			return fmt.Errorf("path is not a directory: %s", absFolder)
-		}
-
-		found, err := generator.FindArazzoFile(absFolder)
+	if info.IsDir() {
+		found, err := generator.FindArazzoFile(abs)
 		if err != nil {
 			return err
 		}
 		filePath = found
-		folderPath = absFolder
+		folderPath = abs
+	} else {
+		filePath = abs
+		folderPath = filepath.Dir(abs)
 	}
 
 	// Run validation — try Spectral first, fall back to built-in
@@ -190,7 +170,7 @@ func runValidateCommand() error {
 
 	// Print helpful suggestion if validation passed
 	if !result.HasErrors() {
-		fmt.Println("💡 Tip: Run 'arazzo-mcp-gen mcp-server generate -d " +
+		fmt.Println("💡 Tip: Run 'arazzo-mcp-gen mcp-server generate -f " +
 			formatFolderHint(folderPath) + "' to build an MCP server from this spec.")
 	}
 

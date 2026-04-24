@@ -28,8 +28,8 @@ import (
 	"github.com/wso2/arazzo-mcp-generator/internal/visualizer"
 )
 
-const VisualizeCmdExample = `# Visualize an Arazzo spec folder (auto-detects the Arazzo file)
-arazzo-mcp-gen visualize -d ./my-arazzo-folder
+const VisualizeCmdExample = `# Visualize a folder (auto-detects the Arazzo file)
+arazzo-mcp-gen visualize -f ./my-arazzo-folder
 
 # Visualize a single Arazzo file directly
 arazzo-mcp-gen visualize -f ./workflow.yaml
@@ -38,11 +38,10 @@ arazzo-mcp-gen visualize -f ./workflow.yaml
 arazzo-mcp-gen visualize -f ./workflow.yaml -o diagram.md
 
 # Save raw Mermaid syntax to a .mmd file
-arazzo-mcp-gen visualize -d ./my-arazzo-folder -o flow.mmd`
+arazzo-mcp-gen visualize -f ./my-arazzo-folder -o flow.mmd`
 
 var (
-	vizFolder string
-	vizFile   string
+	vizPath   string
 	vizOutput string
 )
 
@@ -78,10 +77,8 @@ Tip: paste Mermaid source into https://mermaid.live for a shareable link.`,
 }
 
 func init() {
-	visualizeCmd.Flags().StringVarP(&vizFolder, "folder", "d", "",
-		"Path to folder containing Arazzo and OpenAPI spec files")
-	visualizeCmd.Flags().StringVarP(&vizFile, "file", "f", "",
-		"Path to a single Arazzo specification file")
+	visualizeCmd.Flags().StringVarP(&vizPath, "file", "f", "",
+		"Path to an Arazzo file or folder containing Arazzo and OpenAPI spec files")
 	visualizeCmd.Flags().StringVarP(&vizOutput, "output", "o", "",
 		"Output file path (.md wraps in fences, .mmd writes raw Mermaid)")
 }
@@ -92,47 +89,34 @@ func Register(root *cobra.Command) {
 }
 
 func runVisualizeCommand() error {
-	if vizFolder == "" && vizFile == "" {
-		return fmt.Errorf("either --folder (-d) or --file (-f) must be specified\n\n" +
+	if vizPath == "" {
+		return fmt.Errorf("-f flag is required\n\n" +
 			"Examples:\n" +
-			"  arazzo-mcp-gen visualize -d ./my-arazzo-folder\n" +
+			"  arazzo-mcp-gen visualize -f ./my-arazzo-folder\n" +
 			"  arazzo-mcp-gen visualize -f ./workflow.yaml")
 	}
-	if vizFolder != "" && vizFile != "" {
-		return fmt.Errorf("cannot use both --folder (-d) and --file (-f) at the same time")
+
+	abs, err := filepath.Abs(vizPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve path: %w", err)
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("path does not exist: %s", abs)
+		}
+		return fmt.Errorf("failed to access path: %w", err)
 	}
 
 	var filePath string
-
-	if vizFile != "" {
-		abs, err := filepath.Abs(vizFile)
-		if err != nil {
-			return fmt.Errorf("failed to resolve file path: %w", err)
-		}
-		if _, err := os.Stat(abs); os.IsNotExist(err) {
-			return fmt.Errorf("file does not exist: %s", abs)
-		}
-		filePath = abs
-	} else {
-		abs, err := filepath.Abs(vizFolder)
-		if err != nil {
-			return fmt.Errorf("failed to resolve folder path: %w", err)
-		}
-		info, err := os.Stat(abs)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return fmt.Errorf("folder does not exist: %s", abs)
-			}
-			return fmt.Errorf("failed to access folder: %w", err)
-		}
-		if !info.IsDir() {
-			return fmt.Errorf("path is not a directory: %s", abs)
-		}
+	if info.IsDir() {
 		found, err := generator.FindArazzoFile(abs)
 		if err != nil {
 			return err
 		}
 		filePath = found
+	} else {
+		filePath = abs
 	}
 
 	return visualizer.Visualize(filePath, vizOutput)

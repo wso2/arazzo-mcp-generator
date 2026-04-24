@@ -27,21 +27,20 @@ import (
 	"github.com/wso2/arazzo-mcp-generator/internal/generator"
 )
 
-const GenerateCmdExample = `# Generate an MCP server Docker image from an Arazzo spec folder
-arazzo-mcp-gen mcp-server generate -d ./my-arazzo-folder
+const GenerateCmdExample = `# Generate an MCP server Docker image from a folder
+arazzo-mcp-gen mcp-server generate -f ./my-arazzo-folder
 
 # Generate from a single Arazzo file directly
 arazzo-mcp-gen mcp-server generate -f ./my-arazzo-folder/workflow.arazzo.yaml
 
 # Generate with a custom port
-arazzo-mcp-gen mcp-server generate -d ./my-arazzo-folder -p 8080
+arazzo-mcp-gen mcp-server generate -f ./my-arazzo-folder -p 8080
 
 # Generate and save build artifacts to a directory for inspection or manual editing
-arazzo-mcp-gen mcp-server generate -d ./my-arazzo-folder -o ./my-output`
+arazzo-mcp-gen mcp-server generate -f ./my-arazzo-folder -o ./my-output`
 
 var (
-	generateFolder string
-	generateFile   string
+	generatePath   string
 	generatePort   int
 	generateOutput string
 )
@@ -55,15 +54,9 @@ The command reads an Arazzo file and its referenced OpenAPI spec files, generate
 a Python MCP server that exposes each workflow as an MCP tool, and builds a Docker
 image ready to run.
 
-You can provide input in two ways:
-  -d, --folder    Path to a folder containing the Arazzo and OpenAPI spec files.
-                  The folder must contain exactly one Arazzo file.
-  -f, --file      Path to a single Arazzo specification file. The parent directory
-                  is used to locate referenced OpenAPI spec files. Useful when a
-                  folder contains multiple Arazzo files and you want to convert
-                  only one.
-
-One of --folder (-d) or --file (-f) is required (but not both).
+Use -f to provide either an Arazzo file or a folder containing Arazzo and OpenAPI spec files.
+  - Folder: the Arazzo file is auto-detected inside it.
+  - File: its parent directory is used to locate referenced OpenAPI spec files.
 
 Flags:
   -p, --port int            Port the MCP server will listen on inside the
@@ -83,8 +76,7 @@ Flags:
 }
 
 func init() {
-	generateCmd.Flags().StringVarP(&generateFolder, "folder", "d", "", "Path to folder containing Arazzo and OpenAPI spec files")
-	generateCmd.Flags().StringVarP(&generateFile, "file", "f", "", "Path to a single Arazzo specification file")
+	generateCmd.Flags().StringVarP(&generatePath, "file", "f", "", "Path to an Arazzo file or folder containing Arazzo and OpenAPI spec files")
 	generateCmd.Flags().IntVarP(&generatePort, "port", "p", 5000, "Port the MCP server will listen on")
 	generateCmd.Flags().StringVarP(&generateOutput, "output", "o", "", "Output directory to save generated files (Dockerfile, server code, specs)")
 }
@@ -100,55 +92,39 @@ func runGenerateCommand() error {
 		return fmt.Errorf("invalid port %d: must be between 1 and 65535", generatePort)
 	}
 
-	// Validate flag usage: exactly one of --folder or --file must be provided
-	if generateFolder == "" && generateFile == "" {
-		return fmt.Errorf("either --folder (-d) or --file (-f) must be specified\n\n" +
+	if generatePath == "" {
+		return fmt.Errorf("-f flag is required\n\n" +
 			"Examples:\n" +
-			"  arazzo-mcp-gen mcp-server generate -d ./my-arazzo-folder\n" +
+			"  arazzo-mcp-gen mcp-server generate -f ./my-arazzo-folder\n" +
 			"  arazzo-mcp-gen mcp-server generate -f ./workflow.arazzo.yaml")
 	}
-	if generateFolder != "" && generateFile != "" {
-		return fmt.Errorf("cannot use both --folder (-d) and --file (-f) at the same time")
+
+	abs, err := filepath.Abs(generatePath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve path: %w", err)
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("path does not exist: %s", abs)
+		}
+		return fmt.Errorf("failed to access path: %w", err)
 	}
 
 	var absFolder string
 	var arazzoFilePath string
 
-	if generateFile != "" {
-		// --file mode: use the given file directly, derive folder from its parent
-		absFile, err := filepath.Abs(generateFile)
-		if err != nil {
-			return fmt.Errorf("failed to resolve file path: %w", err)
-		}
-		if _, err := os.Stat(absFile); os.IsNotExist(err) {
-			return fmt.Errorf("file does not exist: %s", absFile)
-		}
-		arazzoFilePath = absFile
-		absFolder = filepath.Dir(absFile)
-	} else {
-		// --folder mode: auto-detect the Arazzo file in the folder
-		var err error
-		absFolder, err = filepath.Abs(generateFolder)
-		if err != nil {
-			return fmt.Errorf("failed to resolve folder path: %w", err)
-		}
-
-		info, err := os.Stat(absFolder)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return fmt.Errorf("folder does not exist: %s", absFolder)
-			}
-			return fmt.Errorf("failed to access folder: %w", err)
-		}
-		if !info.IsDir() {
-			return fmt.Errorf("path is not a directory: %s", absFolder)
-		}
-
+	if info.IsDir() {
+		absFolder = abs
 		fmt.Println("Validating input folder...")
-		arazzoFilePath, err = generator.FindArazzoFile(absFolder)
-		if err != nil {
-			return err
+		var findErr error
+		arazzoFilePath, findErr = generator.FindArazzoFile(absFolder)
+		if findErr != nil {
+			return findErr
 		}
+	} else {
+		arazzoFilePath = abs
+		absFolder = filepath.Dir(abs)
 	}
 
 	arazzoFileName := filepath.Base(arazzoFilePath)
