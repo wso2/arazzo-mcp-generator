@@ -19,11 +19,25 @@
 package generator
 
 import (
+	_ "embed"
 	"fmt"
 	"sort"
 	"strings"
+	"text/template"
 	"unicode"
 )
+
+//go:embed mcp_server.py.tmpl
+var mcpServerTemplate string
+
+// serverTemplateData holds all values the mcp_server.py.tmpl template needs.
+type serverTemplateData struct {
+	Title             string // Python string literal, e.g. "My API"
+	ArazzoFileName    string
+	Port              int
+	RemoteSourcePatch string // pre-rendered block (empty or ends with "\n")
+	Tools             string // pre-rendered tool functions (no trailing blank line)
+}
 
 // GenerateServerCode produces the Python MCP server script from a parsed Arazzo spec.
 // The generated server uses fastmcp and arazzo_runner to expose each workflow as a tool.
@@ -40,83 +54,59 @@ func GenerateServerCode(spec *ArazzoSpec, arazzoFileName string, port int) (stri
 		workflowClassified[wf.WorkflowID] = ClassifyInputs(wf)
 	}
 
-	var b strings.Builder
+	// ── Pre-render: remote source URL patch block ──
+	remoteSourcePatch := buildRemoteSourcePatch(spec)
 
-	// ── Imports ──
-	b.WriteString("import requests\n")
-	b.WriteString("from urllib.parse import urlparse\n")
-	b.WriteString("from fastmcp import FastMCP\n")
-	b.WriteString("from arazzo_runner import ArazzoRunner\n")
-	b.WriteString("\n")
+	// ── Pre-render: tool functions ──
+	tools := buildToolsBlock(spec, workflowClassified)
 
-	// Initialize FastMCP server
-	b.WriteString(fmt.Sprintf("# Initialize FastMCP server\n"))
-	b.WriteString(fmt.Sprintf("mcp = FastMCP(%q)\n", spec.Info.Title))
-	b.WriteString("\n")
-
-	// Load the Arazzo file
-	b.WriteString("# Load the Arazzo file\n")
-	b.WriteString("_http = requests.Session()\n")
-	b.WriteString("# Set ARAZZO_DISABLE_TLS_VERIFY=1 to disable TLS certificate verification (e.g. for self-signed certs).\n")
-	b.WriteString("import os as _os\n")
-	b.WriteString("if _os.environ.get(\"ARAZZO_DISABLE_TLS_VERIFY\", \"\").strip() == \"1\":\n")
-	b.WriteString("    _http.verify = False\n")
-	b.WriteString("    import urllib3; urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)\n")
-	b.WriteString(fmt.Sprintf("runner = ArazzoRunner.from_arazzo_path(\"./arazzo/%s\", http_client=_http)\n", arazzoFileName))
-	b.WriteString("\n")
-
-	// Fix relative server URLs for URL-based source descriptions
-	if hasRemoteSourceDescriptions(spec) {
-		b.WriteString("# Resolve relative server URLs in remote source descriptions\n")
-		for _, sd := range spec.SourceDescriptions {
-			if strings.HasPrefix(sd.URL, "http://") || strings.HasPrefix(sd.URL, "https://") {
-				b.WriteString(fmt.Sprintf("if %q in runner.source_descriptions:\n", sd.Name))
-				b.WriteString(fmt.Sprintf("    _parsed = urlparse(%q)\n", sd.URL))
-				b.WriteString(fmt.Sprintf("    _base = f\"{_parsed.scheme}://{_parsed.netloc}\"\n"))
-				b.WriteString(fmt.Sprintf("    for _srv in runner.source_descriptions[%q].get(\"servers\", []):\n", sd.Name))
-				b.WriteString(fmt.Sprintf("        if _srv.get(\"url\", \"\") and not _srv[\"url\"].startswith(\"http\"):\n"))
-				b.WriteString(fmt.Sprintf("            _srv[\"url\"] = _base + _srv[\"url\"]\n"))
-			}
-		}
-		b.WriteString("\n")
+	// ── Execute template ──
+	tmpl, err := template.New("mcp_server").Parse(mcpServerTemplate)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse server template: %w", err)
 	}
 
-	// ── Monkey-patch: fix arazzo-runner GOTO off-by-one bug ──
-	// The library's execute_next_step always advances current_step_id by +1.
-	// After a GOTO sets current_step_id to the target, the next call skips
-	// past it.  This patch adjusts current_step_id after a GOTO so the +1
-	// correctly lands on the intended target step.
-	b.WriteString("# ── Fix arazzo-runner GOTO off-by-one bug ──\n")
-	b.WriteString("_original_execute_next_step = ArazzoRunner.execute_next_step\n")
-	b.WriteString("\n")
-	b.WriteString("def _fixed_execute_next_step(self, execution_id):\n")
-	b.WriteString("    result = _original_execute_next_step(self, execution_id)\n")
-	b.WriteString("    status = result.get(\"status\")\n")
-	b.WriteString("    if hasattr(status, \"value\"):\n")
-	b.WriteString("        status = status.value\n")
-	b.WriteString("    if status == \"goto_step\":\n")
-	b.WriteString("        target_step_id = result.get(\"step_id\")\n")
-	b.WriteString("        state = self.execution_states[execution_id]\n")
-	b.WriteString("        workflow = None\n")
-	b.WriteString("        for wf in (self.arazzo_doc or {}).get(\"workflows\", []):\n")
-	b.WriteString("            if wf.get(\"workflowId\") == state.workflow_id:\n")
-	b.WriteString("                workflow = wf\n")
-	b.WriteString("                break\n")
-	b.WriteString("        if workflow:\n")
-	b.WriteString("            steps = workflow.get(\"steps\", [])\n")
-	b.WriteString("            for idx, step in enumerate(steps):\n")
-	b.WriteString("                if step.get(\"stepId\") == target_step_id:\n")
-	b.WriteString("                    if idx == 0:\n")
-	b.WriteString("                        state.current_step_id = None\n")
-	b.WriteString("                    else:\n")
-	b.WriteString("                        state.current_step_id = steps[idx - 1].get(\"stepId\")\n")
-	b.WriteString("                    break\n")
-	b.WriteString("    return result\n")
-	b.WriteString("\n")
-	b.WriteString("ArazzoRunner.execute_next_step = _fixed_execute_next_step\n")
-	b.WriteString("\n")
+	data := serverTemplateData{
+		Title:             fmt.Sprintf("%q", spec.Info.Title),
+		ArazzoFileName:    arazzoFileName,
+		Port:              port,
+		RemoteSourcePatch: remoteSourcePatch,
+		Tools:             tools,
+	}
 
-	// ── Generate a tool for each workflow ──
+	var b strings.Builder
+	if err := tmpl.Execute(&b, data); err != nil {
+		return "", fmt.Errorf("failed to render server template: %w", err)
+	}
+	return b.String(), nil
+}
+
+// buildRemoteSourcePatch pre-renders the optional remote source URL patch block.
+// Returns "\n" when there are no remote sources (the blank line after the runner= line).
+// Returns the full patch block + trailing "\n" when remote sources are present.
+func buildRemoteSourcePatch(spec *ArazzoSpec) string {
+	if !hasRemoteSourceDescriptions(spec) {
+		return "\n"
+	}
+	var b strings.Builder
+	b.WriteString("# Resolve relative server URLs in remote source descriptions\n")
+	for _, sd := range spec.SourceDescriptions {
+		if strings.HasPrefix(sd.URL, "http://") || strings.HasPrefix(sd.URL, "https://") {
+			b.WriteString(fmt.Sprintf("if %q in runner.source_descriptions:\n", sd.Name))
+			b.WriteString(fmt.Sprintf("    _parsed = urlparse(%q)\n", sd.URL))
+			b.WriteString(fmt.Sprintf("    _base = f\"{_parsed.scheme}://{_parsed.netloc}\"\n"))
+			b.WriteString(fmt.Sprintf("    for _srv in runner.source_descriptions[%q].get(\"servers\", []):\n", sd.Name))
+			b.WriteString(fmt.Sprintf("        if _srv.get(\"url\", \"\") and not _srv[\"url\"].startswith(\"http\"):\n"))
+			b.WriteString(fmt.Sprintf("            _srv[\"url\"] = _base + _srv[\"url\"]\n"))
+		}
+	}
+	b.WriteString("\n")
+	return b.String()
+}
+
+// buildToolsBlock pre-renders all @mcp.tool() function definitions.
+func buildToolsBlock(spec *ArazzoSpec, workflowClassified map[string]ClassifiedInputs) string {
+	var b strings.Builder
 	for i, wf := range spec.Workflows {
 		if i > 0 {
 			b.WriteString("\n")
@@ -126,17 +116,12 @@ func GenerateServerCode(spec *ArazzoSpec, arazzoFileName string, port int) (stri
 
 		funcName := camelToSnake(wf.WorkflowID)
 		docstring := workflowDocstringWithAuth(wf, classified)
-
-		// Function params = regular inputs + credential inputs (as tool params)
 		params := buildAllParams(classified.RegularInputs, classified.CredentialInputs)
-
-		// Input dict = maps all params (original Arazzo name → Python variable name)
 		inputDict := buildAllInputDict(classified.RegularInputs, classified.CredentialInputs)
 
 		b.WriteString(fmt.Sprintf("# ── Tool %d: %s workflow\n", i+1, wf.WorkflowID))
 		b.WriteString("@mcp.tool()\n")
 		b.WriteString(fmt.Sprintf("async def %s(%s) -> str:\n", funcName, params))
-		// Write multi-line docstring
 		b.WriteString(fmt.Sprintf("    \"\"\"%s\"\"\"\n", docstring))
 		b.WriteString("    try:\n")
 		b.WriteString(fmt.Sprintf("        result = runner.execute_workflow(%q, {%s})\n", wf.WorkflowID, inputDict))
@@ -146,13 +131,7 @@ func GenerateServerCode(spec *ArazzoSpec, arazzoFileName string, port int) (stri
 		b.WriteString("    except Exception as e:\n")
 		b.WriteString("        return f\"Workflow Error: {str(e)}\"\n")
 	}
-
-	// Main entry point
-	b.WriteString("\n")
-	b.WriteString("\nif __name__ == \"__main__\":\n")
-	b.WriteString(fmt.Sprintf("    mcp.run(transport=\"http\", host=\"0.0.0.0\", port=%d, stateless_http=True)\n", port))
-
-	return b.String(), nil
+	return b.String()
 }
 
 // camelToSnake converts a camelCase or PascalCase string to snake_case.
