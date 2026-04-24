@@ -16,7 +16,7 @@
  * under the License.
  */
 
-package cmd
+package inspect
 
 import (
 	"fmt"
@@ -72,7 +72,11 @@ func init() {
 		"Path to folder containing Arazzo and OpenAPI spec files")
 	inspectCmd.Flags().StringVarP(&inspectFile, "file", "f", "",
 		"Path to a single Arazzo specification file")
-	rootCmd.AddCommand(inspectCmd)
+}
+
+// Register adds the inspect command to the given parent command.
+func Register(root *cobra.Command) {
+	root.AddCommand(inspectCmd)
 }
 
 func runInspectCommand() error {
