@@ -43,6 +43,69 @@ def _fixed_execute_next_step(self, execution_id):
 
 ArazzoRunner.execute_next_step = _fixed_execute_next_step
 
+# ── Fix arazzo-runner action criteria $statusCode evaluation bug ──
+# ActionHandler._check_action_criteria builds an empty context {}, so
+# $statusCode always evaluates to None and criteria like "$statusCode == 200"
+# always fail.  The fix stores the last step's response on the state object
+# (as a transient attribute) inside execute_next_step, and patches
+# _check_action_criteria to use it when building the evaluation context.
+from arazzo_runner.executor.action_handler import ActionHandler as _ActionHandler
+from arazzo_runner.evaluator import ExpressionEvaluator as _ExpressionEvaluator
+
+_original_check_action_criteria = _ActionHandler._check_action_criteria
+
+def _fixed_check_action_criteria(self, criteria, state):
+    response = getattr(state, "_last_step_response", None)
+    status_code = response.get("status_code") if response else None
+    additional_context = {"statusCode": status_code, "response": response} if status_code is not None else {}
+    import logging as _logging
+    _logger = _logging.getLogger("arazzo-runner.executor")
+
+    _logger.info(f"Checking {len(criteria)} action criteria")
+    for i, criterion in enumerate(criteria):
+        condition = criterion.get("condition")
+        criterion_type = criterion.get("type", "simple")
+        _logger.info(f"Criterion {i+1}: type={criterion_type}, condition={condition}")
+        if criterion_type == "simple":
+            result = _ExpressionEvaluator.evaluate_simple_condition(
+                condition, state, self.source_descriptions, additional_context
+            )
+            if not result:
+                _logger.warning(f"Simple condition failed: {condition}")
+                return False
+            _logger.info(f"Simple condition passed: {condition}")
+        else:
+            # Fall back to original logic for non-simple criteria types
+            return _original_check_action_criteria(self, [criterion], state)
+    _logger.info("All criteria passed")
+    return True
+
+_ActionHandler._check_action_criteria = _fixed_check_action_criteria
+
+_original_execute_next_step_v2 = ArazzoRunner.execute_next_step
+
+def _execute_next_step_with_response(self, execution_id):
+    # We need to capture the step response before action handling.
+    # Intercept at the step executor level to store _last_step_response on state.
+    from arazzo_runner.executor.step_executor import StepExecutor as _StepExecutor
+    _original_exec_step = _StepExecutor.execute_step
+
+    state = self.execution_states.get(execution_id)
+
+    def _capturing_execute_step(step_self, step, st):
+        result = _original_exec_step(step_self, step, st)
+        st._last_step_response = result.get("response")
+        return result
+
+    _StepExecutor.execute_step = _capturing_execute_step
+    try:
+        return _original_execute_next_step_v2(self, execution_id)
+    finally:
+        _StepExecutor.execute_step = _original_exec_step
+
+ArazzoRunner.execute_next_step = _execute_next_step_with_response
+#---------------end of fix--------------------------------------------------
+
 {{.Tools}}
 
 if __name__ == "__main__":
