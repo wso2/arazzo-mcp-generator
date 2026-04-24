@@ -14,9 +14,9 @@
    - [inspect](#inspect)
    - [visualize](#visualize)
    - [mcp-server generate](#mcp-server-generate)
-5. [Sample Arazzo File](#sample-arazzo-file)
-6. [User Scenario: End-to-End Walkthrough](#user-scenario-end-to-end-walkthrough)
-7. [Generated Artifacts](#generated-artifacts)
+5. [User Scenario: End-to-End Walkthrough](#user-scenario-end-to-end-walkthrough)
+6. [Generated Artifacts](#generated-artifacts)
+7. [Sample Arazzo File](#sample-arazzo-file)
 8. [License](#license)
 
 ---
