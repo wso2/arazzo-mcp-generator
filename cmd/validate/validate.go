@@ -16,7 +16,7 @@
  * under the License.
  */
 
-package cmd
+package validate
 
 import (
 	"fmt"
@@ -94,8 +94,11 @@ func init() {
 		"Check that remote source description URLs are accessible")
 	validateCmd.Flags().BoolVar(&validateStrict, "strict", false,
 		"Treat warnings as errors (exit code 1 on warnings)")
+}
 
-	rootCmd.AddCommand(validateCmd)
+// Register adds the validate command to the given parent command.
+func Register(root *cobra.Command) {
+	root.AddCommand(validateCmd)
 }
 
 func runValidateCommand() error {
