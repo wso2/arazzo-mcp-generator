@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -283,44 +282,6 @@ func ClassifyInputs(wf Workflow) ClassifiedInputs {
 		}
 	}
 	return result
-}
-
-// CredentialEnvVarName generates a Docker environment variable name from the
-// Arazzo spec title and the input property name.
-// Example: title="Petstore API", inputName="apiKey" → "PETSTORE_API_API_KEY"
-func CredentialEnvVarName(specTitle string, inputName string) string {
-	// Convert title: uppercase, replace non-alnum with underscore
-	title := strings.ToUpper(specTitle)
-	reg := regexp.MustCompile(`[^A-Z0-9]+`)
-	title = reg.ReplaceAllString(title, "_")
-	title = strings.Trim(title, "_")
-
-	// Convert input name: insert underscore before capitals, then uppercase
-	inputSnake := camelToSnakeUpper(inputName)
-
-	return title + "_" + inputSnake
-}
-
-// camelToSnakeUpper converts camelCase to UPPER_SNAKE_CASE.
-func camelToSnakeUpper(s string) string {
-	runes := []rune(s)
-	var result strings.Builder
-	for i, r := range runes {
-		if unicode.IsUpper(r) {
-			if i > 0 {
-				prev := runes[i-1]
-				if unicode.IsLower(prev) || unicode.IsDigit(prev) {
-					result.WriteRune('_')
-				} else if unicode.IsUpper(prev) && i+1 < len(runes) && unicode.IsLower(runes[i+1]) {
-					result.WriteRune('_')
-				}
-			}
-			result.WriteRune(unicode.ToUpper(r))
-		} else {
-			result.WriteRune(unicode.ToUpper(r))
-		}
-	}
-	return result.String()
 }
 
 // probeSourceURL checks whether a remote URL is accessible by issuing a HEAD
