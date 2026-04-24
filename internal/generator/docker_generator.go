@@ -48,7 +48,7 @@ func GenerateDockerfile(port int) string {
 	b.WriteString("WORKDIR /app\n")
 	b.WriteString("\n")
 	b.WriteString("# Install Python dependencies\n")
-	b.WriteString("RUN pip install --no-cache-dir fastmcp arazzo-runner\n")
+	b.WriteString("RUN pip install --no-cache-dir fastmcp arazzo-runner==0.9.6\n")
 	b.WriteString("\n")
 	b.WriteString("# Copy the Arazzo spec files and OpenAPI spec files\n")
 	b.WriteString("COPY arazzo/ ./arazzo/\n")
