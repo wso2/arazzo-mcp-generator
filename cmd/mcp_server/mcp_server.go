@@ -16,10 +16,11 @@
  * under the License.
  */
 
-package cmd
+package mcpserver
 
 import (
 	"github.com/spf13/cobra"
+	"github.com/wso2/arazzo-mcp-generator/cmd/mcp_server/generate"
 )
 
 var mcpServerCmd = &cobra.Command{
@@ -28,5 +29,10 @@ var mcpServerCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(mcpServerCmd)
+	generate.Register(mcpServerCmd)
+}
+
+// Register adds the mcp-server command to the given parent command.
+func Register(root *cobra.Command) {
+	root.AddCommand(mcpServerCmd)
 }

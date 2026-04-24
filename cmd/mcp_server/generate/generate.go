@@ -16,7 +16,7 @@
  * under the License.
  */
 
-package cmd
+package generate
 
 import (
 	"fmt"
@@ -87,8 +87,11 @@ func init() {
 	generateCmd.Flags().StringVarP(&generateFile, "file", "f", "", "Path to a single Arazzo specification file")
 	generateCmd.Flags().IntVarP(&generatePort, "port", "p", 5000, "Port the MCP server will listen on")
 	generateCmd.Flags().StringVarP(&generateOutput, "output", "o", "", "Output directory to save generated files (Dockerfile, server code, specs)")
+}
 
-	mcpServerCmd.AddCommand(generateCmd)
+// Register adds the generate command to the given parent command.
+func Register(parent *cobra.Command) {
+	parent.AddCommand(generateCmd)
 }
 
 func runGenerateCommand() error {
