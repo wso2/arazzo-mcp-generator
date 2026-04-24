@@ -156,7 +156,7 @@ func BuildMCPServerImage(config MCPServerBuildConfig) error {
 		fmt.Sprintf("URL:    %s", serverURL),
 		"",
 		"If TLS verification must be disabled for self-signed HTTPS endpoints,",
-		"run the image with: -e ARAZZO_MCP_INSECURE=1",
+		"run the image with: -e ARAZZO_DISABLE_TLS_VERIFY=1",
 	}
 	if config.OutputDir != "" {
 		summaryLines = append(summaryLines, "", fmt.Sprintf("Build artifacts saved to: %s", buildDir))

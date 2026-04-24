@@ -57,9 +57,9 @@ func GenerateServerCode(spec *ArazzoSpec, arazzoFileName string, port int) (stri
 	// Load the Arazzo file
 	b.WriteString("# Load the Arazzo file\n")
 	b.WriteString("_http = requests.Session()\n")
-	b.WriteString("# Set ARAZZO_MCP_INSECURE=1 to disable TLS certificate verification (e.g. for self-signed certs).\n")
+	b.WriteString("# Set ARAZZO_DISABLE_TLS_VERIFY=1 to disable TLS certificate verification (e.g. for self-signed certs).\n")
 	b.WriteString("import os as _os\n")
-	b.WriteString("if _os.environ.get(\"ARAZZO_MCP_INSECURE\", \"\").strip() == \"1\":\n")
+	b.WriteString("if _os.environ.get(\"ARAZZO_DISABLE_TLS_VERIFY\", \"\").strip() == \"1\":\n")
 	b.WriteString("    _http.verify = False\n")
 	b.WriteString("    import urllib3; urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)\n")
 	b.WriteString(fmt.Sprintf("runner = ArazzoRunner.from_arazzo_path(\"./arazzo/%s\", http_client=_http)\n", arazzoFileName))

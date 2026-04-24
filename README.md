@@ -352,7 +352,7 @@ docker run -p 5000:5000 <image-name>
 If your workflow uses HTTPS endpoints with self-signed or otherwise invalid TLS certificates, run the image with the following environment variable to disable certificate verification:
 
 ```bash
-docker run -e ARAZZO_MCP_INSECURE=1 -p 5000:5000 <image-name>
+docker run -e ARAZZO_DISABLE_TLS_VERIFY=1 -p 5000:5000 <image-name>
 ```
 
 The MCP endpoint is available at `http://localhost:5000/mcp`.
