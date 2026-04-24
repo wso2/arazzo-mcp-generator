@@ -23,7 +23,11 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/wso2/arazzo-mcp-generator/cmd/inspect"
 	mcpserver "github.com/wso2/arazzo-mcp-generator/cmd/mcp_server"
+	"github.com/wso2/arazzo-mcp-generator/cmd/sample"
+	"github.com/wso2/arazzo-mcp-generator/cmd/validate"
+	"github.com/wso2/arazzo-mcp-generator/cmd/visualize"
 	"github.com/wso2/arazzo-mcp-generator/internal/metadata"
 )
 
@@ -38,6 +42,10 @@ func init() {
 	// Disable Cobra's default `completion` subcommand so it doesn't appear in help output.
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	mcpserver.Register(rootCmd)
+	inspect.Register(rootCmd)
+	sample.Register(rootCmd)
+	validate.Register(rootCmd)
+	visualize.Register(rootCmd)
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
