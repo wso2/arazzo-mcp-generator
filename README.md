@@ -10,14 +10,14 @@
 2. [Prerequisites](#prerequisites)
 3. [Installation](#installation)
 4. [Commands](#commands)
-   - [sample](#sample)
    - [validate](#validate)
    - [inspect](#inspect)
    - [visualize](#visualize)
    - [mcp-server generate](#mcp-server-generate)
-5. [User Scenario: End-to-End Walkthrough](#user-scenario-end-to-end-walkthrough)
-6. [Generated Artifacts](#generated-artifacts)
-7. [License](#license)
+5. [Sample Arazzo File](#sample-arazzo-file)
+6. [User Scenario: End-to-End Walkthrough](#user-scenario-end-to-end-walkthrough)
+7. [Generated Artifacts](#generated-artifacts)
+8. [License](#license)
 
 ---
 
@@ -123,37 +123,6 @@ docker run -p 5000:5000 <image-name-from-output>
 --- -->
 
 ## Commands
-
-### `sample`
-
-Creates a new directory with a ready-to-use sample Arazzo spec targeting the Petstore v3 API. Good starting point for writing your own spec.
-
-```bash
-arazzo-mcp-gen sample [project-name]
-```
-
-| Argument | Description | Default |
-|----------|-------------|---------|
-| `project-name` | Name of the folder to create | `sample-arazzo-project` |
-
-**Examples**
-
-```bash
-# Create a folder called 'sample-arazzo-project'
-arazzo-mcp-gen sample
-
-# Create a folder called 'my-api-project'
-arazzo-mcp-gen sample my-api-project
-```
-
-What it creates:
-
-```text
-my-api-project/
-└── petstore_workflow.yaml   ← sample Arazzo spec targeting Petstore v3
-```
-
----
 
 ### `validate`
 
@@ -499,6 +468,108 @@ artifacts/
 | `mcp_server.py` | Python server using `fastmcp` and `arazzo-runner`. Workflow inputs become typed function parameters; docstrings come from workflow summaries/descriptions. |
 | `Dockerfile` | Standard slim Python container. Installs dependencies, copies the `arazzo/` folder, and runs `mcp_server.py`. |
 | `arazzo/` | All spec files the container needs to resolve `$ref` and `sourceDescriptions` at runtime. |
+
+---
+
+## Sample Arazzo File
+
+To get started, create a folder for your project and save the following as `petstore_workflow.yaml` inside it. This is a ready-to-use Arazzo spec targeting the public [Petstore v3 API](https://petstore3.swagger.io) — it checks whether a pet exists by ID, updates its name if found, or creates it if not.
+
+```yaml
+arazzo: 1.0.1
+info:
+  title: Pet Upsert Workflow (V3)
+  summary: A sample workflow that conditionally creates or updates a pet using Petstore V3
+  description: Workflow targeting Petstore V3 API. Takes an id and name - renames the pet if it exists, creates it if not.
+  version: 1.0.0
+
+sourceDescriptions:
+  - name: petstoreApiV3
+    url: https://petstore3.swagger.io/api/v3/openapi.json
+    type: openapi
+
+workflows:
+  - workflowId: ensurePetExistsV3
+    summary: Check if a pet exists by ID; update its name if found, create it if not.
+    description: This workflow demonstrates conditional logic based on API responses. It first checks if a pet with the given ID exists. If it does, it updates the pet's name. If it doesn't, it creates a new pet with the provided ID and name.
+    inputs:
+      type: object
+      properties:
+        petId: { type: integer, default: 12345 }
+        newName: { type: string, default: Fluffy }
+
+    steps:
+      - stepId: checkStep
+        description: Check if the pet exists and route accordingly.
+        operationId: getPetById
+        parameters:
+          - name: petId
+            in: path
+            value: $inputs.petId
+
+        successCriteria:
+          - condition: $statusCode == 200
+
+        # Branch based on which status code was returned
+        onSuccess:
+          - name: petFoundRouteToUpdate
+            criteria:
+              - condition: $statusCode == 200
+            type: goto
+            stepId: updateStep
+
+        # Retry on true server errors
+        onFailure:
+          - name: retryOnServerError
+            criteria:
+              - condition: $statusCode >= 500
+            type: retry
+            retryAfter: 5
+
+      - stepId: createStep
+        description: Pet not found - create it with the given id and name.
+        operationId: addPet
+        requestBody:
+          contentType: application/json
+          payload:
+            id: $inputs.petId
+            name: $inputs.newName
+            category:
+              id: 1
+              name: Dogs
+            photoUrls:
+              - "https://example.com/pet.jpg"
+            tags:
+              - id: 0
+                name: string
+            status: "available"
+        onSuccess:
+          - name: endAfterCreation
+            type: end
+
+      - stepId: updateStep
+        description: Pet found - rename it using a full PUT update.
+        operationId: updatePet
+        requestBody:
+          contentType: application/json
+          payload:
+            id: $inputs.petId
+            name: $inputs.newName
+            category:
+              id: 1
+              name: Dogs
+            photoUrls:
+              - "https://example.com/pet.jpg"
+            tags:
+              - id: 0
+                name: string
+            status: "available"
+        onSuccess:
+          - name: endAfterUpdate
+            type: end
+```
+
+Once you have this file saved, follow the [End-to-End Walkthrough](#user-scenario-end-to-end-walkthrough) to validate, inspect, and generate an MCP server from it.
 
 ---
 
