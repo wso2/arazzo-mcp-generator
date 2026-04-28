@@ -399,7 +399,10 @@ Building Docker image...
 ║ Run:    docker run -p 5000:5000 pet-upsert-workflow-v3-mcp-server      ║
 ║ URL:    http://localhost:5000                                          ║
 ║                                                                        ║
-║ Build artifacts saved to: ./artifacts                                  ║
+║ If TLS verification must be disabled for self-signed HTTPS endpoints,  ║
+║ run the image with: -e ARAZZO_DISABLE_TLS_VERIFY=1                     ║
+║                                                                        ║
+║ Build artifacts saved to: /path/to/pet-project/artifacts               ║
 ╚════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -463,7 +466,7 @@ artifacts/
 To get started, create a folder for your project and save the following as `petstore_workflow.yaml` inside it. This is a ready-to-use Arazzo spec targeting the public [Petstore v3 API](https://petstore3.swagger.io) — it checks whether a pet exists by ID, updates its name if found, or creates it if not.
 
 ```yaml
-arazzo: 1.0.1
+arazzo: "1.0.0"
 info:
   title: Pet Upsert Workflow (V3)
   summary: A sample workflow that conditionally creates or updates a pet using Petstore V3
@@ -482,8 +485,8 @@ workflows:
     inputs:
       type: object
       properties:
-        petId: { type: integer, default: 12345 }
-        newName: { type: string, default: Fluffy }
+        petId: { type: integer }
+        newName: { type: string }
 
     steps:
       - stepId: checkStep
