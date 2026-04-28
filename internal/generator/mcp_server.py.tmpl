@@ -104,6 +104,140 @@ def _execute_next_step_with_response(self, execution_id):
         _StepExecutor.execute_step = _original_exec_step
 
 ArazzoRunner.execute_next_step = _execute_next_step_with_response
+#-----------------------------end of fix--------------------------------------------------
+
+# ── Fix arazzo-runner RETRY bug ──
+# Bug 1: When RETRY is returned, state.current_step_id already points at the
+#   step that just failed.  The next execute_next_step call therefore advances
+#   to current_step_id+1 (the step AFTER the failed one) instead of retrying
+#   the same step.
+# Bug 2: retryLimit is read but never enforced.  After all retries are
+#   exhausted the next failure action in the onFailure list (e.g. a goto)
+#   is never processed.
+import time as _time
+
+_pre_retry_fix_execute_next_step = ArazzoRunner.execute_next_step
+
+def _execute_next_step_with_retry_fix(self, execution_id):
+    result = _pre_retry_fix_execute_next_step(self, execution_id)
+
+    status = result.get("status")
+    if hasattr(status, "value"):
+        status = status.value
+    if status != "retry":
+        return result
+
+    import logging as _logging
+    _rlogger = _logging.getLogger("arazzo-runner")
+
+    step_id    = result.get("step_id")
+    retry_after = result.get("retry_after", 0)
+    state      = self.execution_states[execution_id]
+
+    # Initialise per-step retry counter (transient attribute on state)
+    if not hasattr(state, "_retry_counts"):
+        state._retry_counts = {}
+
+    current_count = state._retry_counts.get(step_id, 0)
+
+    # Locate workflow and step definition
+    workflow = None
+    for wf in (self.arazzo_doc or {}).get("workflows", []):
+        if wf.get("workflowId") == state.workflow_id:
+            workflow = wf
+            break
+    if not workflow:
+        return result
+
+    steps    = workflow.get("steps", [])
+    step_def = None
+    step_idx = None
+    for i, s in enumerate(steps):
+        if s.get("stepId") == step_id:
+            step_def = s
+            step_idx = i
+            break
+    if step_def is None:
+        return result
+
+    # Find the first retry action and its position in onFailure
+    retry_action     = None
+    retry_action_idx = None
+    for i, action in enumerate(step_def.get("onFailure", [])):
+        if action.get("type") == "retry":
+            retry_action     = action
+            retry_action_idx = i
+            break
+
+    retry_limit = retry_action.get("retryLimit", 1) if retry_action else 1
+
+    if current_count < retry_limit:
+        # Still within retry limit — re-point current_step_id so the next
+        # execute_next_step call picks up THIS step again (not the next one).
+        state._retry_counts[step_id] = current_count + 1
+        _rlogger.info(
+            f"Retry {current_count + 1}/{retry_limit} for step {step_id}"
+            + (f", waiting {retry_after}s" if retry_after > 0 else "")
+        )
+        state.current_step_id = steps[step_idx - 1].get("stepId") if step_idx > 0 else None
+        if retry_after > 0:
+            _time.sleep(retry_after)
+        return result  # RETRY status keeps execute_workflow loop running
+
+    # ── Retry limit exhausted ── process the next failure action ──
+    state._retry_counts.pop(step_id, None)
+    _rlogger.info(
+        f"Retry limit {retry_limit} exhausted for step {step_id}; "
+        "processing next failure action"
+    )
+
+    if retry_action_idx is None:
+        return result  # No retry action found; leave original RETRY result
+
+    for action in step_def.get("onFailure", [])[retry_action_idx + 1:]:
+        action_type = action.get("type")
+        action_name = action.get("name", "unknown")
+        _rlogger.info(f"Next failure action after exhausted retry: {action_name} ({action_type})")
+
+        if action_type == "end":
+            return {
+                "status": "error",
+                "workflow_id": state.workflow_id,
+                "step_id": step_id,
+                "error": f"Step {step_id} failed after {retry_limit} retries",
+                "outputs": state.workflow_outputs,
+            }
+
+        elif action_type == "goto":
+            if "workflowId" in action:
+                new_exec_id = self.start_workflow(action["workflowId"])
+                return {
+                    "status": "goto_workflow",
+                    "workflow_id": action["workflowId"],
+                    "execution_id": new_exec_id,
+                }
+            elif "stepId" in action:
+                target = action["stepId"]
+                # Set goto_step_id so the next execute_next_step jumps there
+                state.goto_step_id = target
+                return {
+                    "status": "goto_step",
+                    "step_id": target,
+                }
+
+    # No further failure actions — end with error
+    return {
+        "status": "error",
+        "workflow_id": state.workflow_id,
+        "step_id": step_id,
+        "error": (
+            f"Step {step_id} failed after {retry_limit} retries "
+            "with no remaining failure actions"
+        ),
+        "outputs": state.workflow_outputs,
+    }
+
+ArazzoRunner.execute_next_step = _execute_next_step_with_retry_fix
 #---------------end of fix--------------------------------------------------
 
 {{.Tools}}
