@@ -1,0 +1,48 @@
+version: 2
+
+project_name: arazzo-mcp-gen
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: arazzo-mcp-gen #unique name for the tool
+    binary: >-
+      arazzo-mcp-gen {{- if ne .Os "windows" }}-{{ .Os }}-{{ .Arch }}{{ end }}
+    main: . #look in the root dir to get the main.go to start the compilation
+    env:
+      - CGO_ENABLED=0 #env variables to be set
+    ldflags:
+      - -X
+        github.com/wso2/arazzo-mcp-generator/internal/metadata.Version={{.Version}}
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_ {{- title .Os }}_ {{- if eq .Arch "amd64" }}x86_64 {{-
+      else if eq .Arch "386" }}i386 {{- else }}{{ .Arch }}{{ end }} {{- if .Arm
+      }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+checksum:
+  name_template: "checksums.txt"
