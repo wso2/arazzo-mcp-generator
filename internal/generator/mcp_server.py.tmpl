@@ -14,34 +14,7 @@ if _os.environ.get("ARAZZO_DISABLE_TLS_VERIFY", "").strip() == "1":
     _http.verify = False
     import urllib3; urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 runner = ArazzoRunner.from_arazzo_path("./arazzo/{{.ArazzoFileName}}", http_client=_http)
-{{.RemoteSourcePatch}}# ── Fix arazzo-runner GOTO off-by-one bug ──
-_original_execute_next_step = ArazzoRunner.execute_next_step
-
-def _fixed_execute_next_step(self, execution_id):
-    result = _original_execute_next_step(self, execution_id)
-    status = result.get("status")
-    if hasattr(status, "value"):
-        status = status.value
-    if status == "goto_step":
-        target_step_id = result.get("step_id")
-        state = self.execution_states[execution_id]
-        workflow = None
-        for wf in (self.arazzo_doc or {}).get("workflows", []):
-            if wf.get("workflowId") == state.workflow_id:
-                workflow = wf
-                break
-        if workflow:
-            steps = workflow.get("steps", [])
-            for idx, step in enumerate(steps):
-                if step.get("stepId") == target_step_id:
-                    if idx == 0:
-                        state.current_step_id = None
-                    else:
-                        state.current_step_id = steps[idx - 1].get("stepId")
-                    break
-    return result
-
-ArazzoRunner.execute_next_step = _fixed_execute_next_step
+{{.RemoteSourcePatch}}
 
 # ── Fix arazzo-runner action criteria $statusCode evaluation bug ──
 # ActionHandler._check_action_criteria builds an empty context {}, so
