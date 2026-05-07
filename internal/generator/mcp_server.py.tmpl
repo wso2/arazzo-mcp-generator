@@ -1,0 +1,219 @@
+import requests
+from urllib.parse import urlparse
+from fastmcp import FastMCP
+from arazzo_runner import ArazzoRunner
+
+# Initialize FastMCP server
+mcp = FastMCP({{.Title}})
+
+# Load the Arazzo file
+_http = requests.Session()
+# Set ARAZZO_DISABLE_TLS_VERIFY=1 to disable TLS certificate verification (e.g. for self-signed certs).
+import os as _os
+if _os.environ.get("ARAZZO_DISABLE_TLS_VERIFY", "").strip() == "1":
+    _http.verify = False
+    import urllib3; urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+runner = ArazzoRunner.from_arazzo_path("./arazzo/{{.ArazzoFileName}}", http_client=_http)
+{{.RemoteSourcePatch}}
+
+# ── Fix arazzo-runner action criteria $statusCode evaluation bug ──
+# ActionHandler._check_action_criteria builds an empty context {}, so
+# $statusCode always evaluates to None and criteria like "$statusCode == 200"
+# always fail.  The fix stores the last step's response on the state object
+# (as a transient attribute) inside execute_next_step, and patches
+# _check_action_criteria to use it when building the evaluation context.
+from arazzo_runner.executor.action_handler import ActionHandler as _ActionHandler
+from arazzo_runner.evaluator import ExpressionEvaluator as _ExpressionEvaluator
+
+_original_check_action_criteria = _ActionHandler._check_action_criteria
+
+def _fixed_check_action_criteria(self, criteria, state):
+    response = getattr(state, "_last_step_response", None)
+    status_code = response.get("status_code") if response else None
+    additional_context = {"statusCode": status_code, "response": response} if status_code is not None else {}
+    import logging as _logging
+    _logger = _logging.getLogger("arazzo-runner.executor")
+
+    _logger.info(f"Checking {len(criteria)} action criteria")
+    for i, criterion in enumerate(criteria):
+        condition = criterion.get("condition")
+        criterion_type = criterion.get("type", "simple")
+        _logger.info(f"Criterion {i+1}: type={criterion_type}, condition={condition}")
+        if criterion_type == "simple":
+            result = _ExpressionEvaluator.evaluate_simple_condition(
+                condition, state, self.source_descriptions, additional_context
+            )
+            if not result:
+                _logger.warning(f"Simple condition failed: {condition}")
+                return False
+            _logger.info(f"Simple condition passed: {condition}")
+        else:
+            # Fall back to original logic for non-simple criteria types
+            return _original_check_action_criteria(self, [criterion], state)
+    _logger.info("All criteria passed")
+    return True
+
+_ActionHandler._check_action_criteria = _fixed_check_action_criteria
+
+_original_execute_next_step_v2 = ArazzoRunner.execute_next_step
+
+def _execute_next_step_with_response(self, execution_id):
+    # We need to capture the step response before action handling.
+    # Intercept at the step executor level to store _last_step_response on state.
+    from arazzo_runner.executor.step_executor import StepExecutor as _StepExecutor
+    _original_exec_step = _StepExecutor.execute_step
+
+    state = self.execution_states.get(execution_id)
+
+    def _capturing_execute_step(step_self, step, st):
+        result = _original_exec_step(step_self, step, st)
+        st._last_step_response = result.get("response")
+        return result
+
+    _StepExecutor.execute_step = _capturing_execute_step
+    try:
+        return _original_execute_next_step_v2(self, execution_id)
+    finally:
+        _StepExecutor.execute_step = _original_exec_step
+
+ArazzoRunner.execute_next_step = _execute_next_step_with_response
+#-----------------------------end of fix--------------------------------------------------
+
+# ── Fix arazzo-runner RETRY bug ──
+# Bug 1: When RETRY is returned, state.current_step_id already points at the
+#   step that just failed.  The next execute_next_step call therefore advances
+#   to current_step_id+1 (the step AFTER the failed one) instead of retrying
+#   the same step.
+# Bug 2: retryLimit is read but never enforced.  After all retries are
+#   exhausted the next failure action in the onFailure list (e.g. a goto)
+#   is never processed.
+import time as _time
+
+_pre_retry_fix_execute_next_step = ArazzoRunner.execute_next_step
+
+def _execute_next_step_with_retry_fix(self, execution_id):
+    result = _pre_retry_fix_execute_next_step(self, execution_id)
+
+    status = result.get("status")
+    if hasattr(status, "value"):
+        status = status.value
+    if status != "retry":
+        return result
+
+    import logging as _logging
+    _rlogger = _logging.getLogger("arazzo-runner")
+
+    step_id    = result.get("step_id")
+    retry_after = result.get("retry_after", 0)
+    state      = self.execution_states[execution_id]
+
+    # Initialise per-step retry counter (transient attribute on state)
+    if not hasattr(state, "_retry_counts"):
+        state._retry_counts = {}
+
+    current_count = state._retry_counts.get(step_id, 0)
+
+    # Locate workflow and step definition
+    workflow = None
+    for wf in (self.arazzo_doc or {}).get("workflows", []):
+        if wf.get("workflowId") == state.workflow_id:
+            workflow = wf
+            break
+    if not workflow:
+        return result
+
+    steps    = workflow.get("steps", [])
+    step_def = None
+    step_idx = None
+    for i, s in enumerate(steps):
+        if s.get("stepId") == step_id:
+            step_def = s
+            step_idx = i
+            break
+    if step_def is None:
+        return result
+
+    # Find the first retry action and its position in onFailure
+    retry_action     = None
+    retry_action_idx = None
+    for i, action in enumerate(step_def.get("onFailure", [])):
+        if action.get("type") == "retry":
+            retry_action     = action
+            retry_action_idx = i
+            break
+
+    retry_limit = retry_action.get("retryLimit", 1) if retry_action else 1
+
+    if current_count < retry_limit:
+        # Still within retry limit — re-point current_step_id so the next
+        # execute_next_step call picks up THIS step again (not the next one).
+        state._retry_counts[step_id] = current_count + 1
+        _rlogger.info(
+            f"Retry {current_count + 1}/{retry_limit} for step {step_id}"
+            + (f", waiting {retry_after}s" if retry_after > 0 else "")
+        )
+        state.current_step_id = steps[step_idx - 1].get("stepId") if step_idx > 0 else None
+        if retry_after > 0:
+            _time.sleep(retry_after)
+        return result  # RETRY status keeps execute_workflow loop running
+
+    # ── Retry limit exhausted ── process the next failure action ──
+    state._retry_counts.pop(step_id, None)
+    _rlogger.info(
+        f"Retry limit {retry_limit} exhausted for step {step_id}; "
+        "processing next failure action"
+    )
+
+    if retry_action_idx is None:
+        return result  # No retry action found; leave original RETRY result
+
+    for action in step_def.get("onFailure", [])[retry_action_idx + 1:]:
+        action_type = action.get("type")
+        action_name = action.get("name", "unknown")
+        _rlogger.info(f"Next failure action after exhausted retry: {action_name} ({action_type})")
+
+        if action_type == "end":
+            return {
+                "status": "error",
+                "workflow_id": state.workflow_id,
+                "step_id": step_id,
+                "error": f"Step {step_id} failed after {retry_limit} retries",
+                "outputs": state.workflow_outputs,
+            }
+
+        elif action_type == "goto":
+            if "workflowId" in action:
+                new_exec_id = self.start_workflow(action["workflowId"])
+                return {
+                    "status": "goto_workflow",
+                    "workflow_id": action["workflowId"],
+                    "execution_id": new_exec_id,
+                }
+            elif "stepId" in action:
+                target = action["stepId"]
+                # Set goto_step_id so the next execute_next_step jumps there
+                state.goto_step_id = target
+                return {
+                    "status": "goto_step",
+                    "step_id": target,
+                }
+
+    # No further failure actions — end with error
+    return {
+        "status": "error",
+        "workflow_id": state.workflow_id,
+        "step_id": step_id,
+        "error": (
+            f"Step {step_id} failed after {retry_limit} retries "
+            "with no remaining failure actions"
+        ),
+        "outputs": state.workflow_outputs,
+    }
+
+ArazzoRunner.execute_next_step = _execute_next_step_with_retry_fix
+#---------------end of fix--------------------------------------------------
+
+{{.Tools}}
+
+if __name__ == "__main__":
+    mcp.run(transport="http", host="0.0.0.0", port={{.Port}}, stateless_http=True)
