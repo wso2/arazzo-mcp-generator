@@ -91,7 +91,7 @@ Each archive contains the binary, `LICENSE`, and `README.md`. Binaries are stati
 
 ```powershell
 # Download and extract (PowerShell)
-Invoke-WebRequest -Uri https://github.com/wso2/arazzo-mcp-generator/releases/download/v0.1.0/arazzo-mcp-gen-0.1.0-windows-amd64.zip -OutFile arazzo-mcp-gen.zip
+Invoke-WebRequest -Uri https://github.com/wso2/arazzo-mcp-generator/releases/download/0.1.0/arazzo-mcp-gen-0.1.0-windows-amd64.zip -OutFile arazzo-mcp-gen.zip
 Expand-Archive -Path arazzo-mcp-gen.zip -DestinationPath .
 # Move arazzo-mcp-gen.exe to a directory in your PATH, or run it directly
 ```
