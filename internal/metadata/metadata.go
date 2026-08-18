@@ -21,6 +21,6 @@
 package metadata
 
 // Version is the current version of arazzo-mcp-gen.
-// It defaults to "v1.0.0" locally and is overridden at build time via
+// It defaults to "v0.1.0" locally and is overridden at build time via
 // -ldflags "-X github.com/wso2/arazzo-mcp-generator/internal/metadata.Version=<tag>".
-var Version = "v1.0.0"
+var Version = "v0.1.0"

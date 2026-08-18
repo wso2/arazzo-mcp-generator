@@ -14,8 +14,10 @@ builds:
     env:
       - CGO_ENABLED=0 #env variables to be set
     ldflags:
+      # Prefixed with "v" so released builds report the same form as the
+      # local default in internal/metadata (goreleaser strips it from .Version).
       - -X
-        github.com/wso2/arazzo-mcp-generator/internal/metadata.Version={{.Version}}
+        github.com/wso2/arazzo-mcp-generator/internal/metadata.Version=v{{.Version}}
     goos:
       - darwin
       - linux
@@ -28,14 +30,8 @@ builds:
         goarch: arm64
 
 archives:
-  - format: tar.gz
-    name_template: >-
-      {{ .ProjectName }}_ {{- title .Os }}_ {{- if eq .Arch "amd64" }}x86_64 {{-
-      else if eq .Arch "386" }}i386 {{- else }}{{ .Arch }}{{ end }} {{- if .Arm
-      }}v{{ .Arm }}{{ end }}
-    format_overrides:
-      - goos: windows
-        format: zip
+  - formats: [zip]
+    name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
 
 changelog:
   sort: asc
