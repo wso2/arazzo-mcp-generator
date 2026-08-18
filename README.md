@@ -56,25 +56,25 @@ Download the archive for your platform from the [Releases](https://github.com/ws
 
 ```bash
 # For macOS (Apple Silicon)
-curl -L https://github.com/wso2/arazzo-mcp-generator/releases/download/v0.1.0/arazzo-mcp-gen-0.1.0-darwin-arm64.zip -o arazzo-mcp-gen.zip
+curl -L https://github.com/wso2/arazzo-mcp-generator/releases/download/0.1.0/arazzo-mcp-gen-0.1.0-darwin-arm64.zip -o arazzo-mcp-gen.zip
 unzip arazzo-mcp-gen.zip
 sudo mv arazzo-mcp-gen-darwin-arm64 /usr/local/bin/arazzo-mcp-gen
 rm arazzo-mcp-gen.zip
 
 # For macOS (Intel)
-curl -L https://github.com/wso2/arazzo-mcp-generator/releases/download/v0.1.0/arazzo-mcp-gen-0.1.0-darwin-amd64.zip -o arazzo-mcp-gen.zip
+curl -L https://github.com/wso2/arazzo-mcp-generator/releases/download/0.1.0/arazzo-mcp-gen-0.1.0-darwin-amd64.zip -o arazzo-mcp-gen.zip
 unzip arazzo-mcp-gen.zip
 sudo mv arazzo-mcp-gen-darwin-amd64 /usr/local/bin/arazzo-mcp-gen
 rm arazzo-mcp-gen.zip
 
 # For Linux (x86_64)
-curl -L https://github.com/wso2/arazzo-mcp-generator/releases/download/v0.1.0/arazzo-mcp-gen-0.1.0-linux-amd64.zip -o arazzo-mcp-gen.zip
+curl -L https://github.com/wso2/arazzo-mcp-generator/releases/download/0.1.0/arazzo-mcp-gen-0.1.0-linux-amd64.zip -o arazzo-mcp-gen.zip
 unzip arazzo-mcp-gen.zip
 sudo mv arazzo-mcp-gen-linux-amd64 /usr/local/bin/arazzo-mcp-gen
 rm arazzo-mcp-gen.zip
 
 # For Linux (ARM64)
-curl -L https://github.com/wso2/arazzo-mcp-generator/releases/download/v0.1.0/arazzo-mcp-gen-0.1.0-linux-arm64.zip -o arazzo-mcp-gen.zip
+curl -L https://github.com/wso2/arazzo-mcp-generator/releases/download/0.1.0/arazzo-mcp-gen-0.1.0-linux-arm64.zip -o arazzo-mcp-gen.zip
 unzip arazzo-mcp-gen.zip
 sudo mv arazzo-mcp-gen-linux-arm64 /usr/local/bin/arazzo-mcp-gen
 rm arazzo-mcp-gen.zip
