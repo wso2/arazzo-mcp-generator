@@ -50,49 +50,63 @@ Given a folder containing:
 
 ## Installation
 
-Download the latest version for your operating system from the [Releases](https://github.com/wso2/arazzo-mcp-generator/releases) page, or use the quick install commands below.
+Download the archive for your platform from the [Releases](https://github.com/wso2/arazzo-mcp-generator/releases) page, or use the quick install commands below. All platforms ship as `.zip`.
 
 ### macOS / Linux
 
 ```bash
 # For macOS (Apple Silicon)
-curl -L https://github.com/wso2/arazzo-mcp-generator/releases/latest/download/arazzo-mcp-gen_Darwin_arm64.tar.gz -o arazzo-mcp-gen.tar.gz
-tar -xzf arazzo-mcp-gen.tar.gz
+curl -L https://github.com/wso2/arazzo-mcp-generator/releases/download/0.1.0/arazzo-mcp-gen-0.1.0-darwin-arm64.zip -o arazzo-mcp-gen.zip
+unzip arazzo-mcp-gen.zip
 sudo mv arazzo-mcp-gen-darwin-arm64 /usr/local/bin/arazzo-mcp-gen
-rm arazzo-mcp-gen.tar.gz
+rm arazzo-mcp-gen.zip
 
 # For macOS (Intel)
-curl -L https://github.com/wso2/arazzo-mcp-generator/releases/latest/download/arazzo-mcp-gen_Darwin_x86_64.tar.gz -o arazzo-mcp-gen.tar.gz
-tar -xzf arazzo-mcp-gen.tar.gz
+curl -L https://github.com/wso2/arazzo-mcp-generator/releases/download/0.1.0/arazzo-mcp-gen-0.1.0-darwin-amd64.zip -o arazzo-mcp-gen.zip
+unzip arazzo-mcp-gen.zip
 sudo mv arazzo-mcp-gen-darwin-amd64 /usr/local/bin/arazzo-mcp-gen
-rm arazzo-mcp-gen.tar.gz
+rm arazzo-mcp-gen.zip
 
 # For Linux (x86_64)
-curl -L https://github.com/wso2/arazzo-mcp-generator/releases/latest/download/arazzo-mcp-gen_Linux_x86_64.tar.gz -o arazzo-mcp-gen.tar.gz
-tar -xzf arazzo-mcp-gen.tar.gz
+curl -L https://github.com/wso2/arazzo-mcp-generator/releases/download/0.1.0/arazzo-mcp-gen-0.1.0-linux-amd64.zip -o arazzo-mcp-gen.zip
+unzip arazzo-mcp-gen.zip
 sudo mv arazzo-mcp-gen-linux-amd64 /usr/local/bin/arazzo-mcp-gen
-rm arazzo-mcp-gen.tar.gz
+rm arazzo-mcp-gen.zip
 
 # For Linux (ARM64)
-curl -L https://github.com/wso2/arazzo-mcp-generator/releases/latest/download/arazzo-mcp-gen_Linux_arm64.tar.gz -o arazzo-mcp-gen.tar.gz
-tar -xzf arazzo-mcp-gen.tar.gz
+curl -L https://github.com/wso2/arazzo-mcp-generator/releases/download/0.1.0/arazzo-mcp-gen-0.1.0-linux-arm64.zip -o arazzo-mcp-gen.zip
+unzip arazzo-mcp-gen.zip
 sudo mv arazzo-mcp-gen-linux-arm64 /usr/local/bin/arazzo-mcp-gen
-rm arazzo-mcp-gen.tar.gz
+rm arazzo-mcp-gen.zip
 ```
+
+Each archive contains the binary, `LICENSE`, and `README.md`. Binaries are statically linked and have no runtime dependencies.
+
+> **macOS note:** the binaries are unsigned and un-notarized. If Gatekeeper blocks the binary, clear the quarantine flag:
+> ```bash
+> xattr -d com.apple.quarantine /usr/local/bin/arazzo-mcp-gen
+> ```
 
 ### Windows
 
 ```powershell
 # Download and extract (PowerShell)
-Invoke-WebRequest -Uri https://github.com/wso2/arazzo-mcp-generator/releases/latest/download/arazzo-mcp-gen_Windows_x86_64.zip -OutFile arazzo-mcp-gen.zip
+Invoke-WebRequest -Uri https://github.com/wso2/arazzo-mcp-generator/releases/download/v0.1.0/arazzo-mcp-gen-0.1.0-windows-amd64.zip -OutFile arazzo-mcp-gen.zip
 Expand-Archive -Path arazzo-mcp-gen.zip -DestinationPath .
 # Move arazzo-mcp-gen.exe to a directory in your PATH, or run it directly
 ```
 
-Verify the installation:
+### Verify the installation
 
 ```bash
 arazzo-mcp-gen --version
+# arazzo-mcp-gen version v0.1.0
+```
+
+To verify an archive against the release's `checksums.txt`:
+
+```bash
+shasum -a 256 -c checksums.txt --ignore-missing
 ```
 
 ---

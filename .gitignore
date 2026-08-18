@@ -1,3 +1,6 @@
+# GoReleaser build output
+dist/
+
 # Compiled class file
 *.class
 
