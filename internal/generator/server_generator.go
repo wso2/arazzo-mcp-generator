@@ -107,6 +107,9 @@ func buildRemoteSourcePatch(spec *ArazzoSpec) string {
 // buildToolsBlock pre-renders all @mcp.tool() function definitions.
 func buildToolsBlock(spec *ArazzoSpec, workflowClassified map[string]ClassifiedInputs) string {
 	var b strings.Builder
+	// Track emitted names so two workflowIds that normalize to the same Python
+	// identifier (for example "place-order" and "placeOrder") do not collide.
+	usedFuncNames := make(map[string]bool)
 	for i, wf := range spec.Workflows {
 		if i > 0 {
 			b.WriteString("\n")
@@ -114,7 +117,12 @@ func buildToolsBlock(spec *ArazzoSpec, workflowClassified map[string]ClassifiedI
 
 		classified := workflowClassified[wf.WorkflowID]
 
-		funcName := camelToSnake(wf.WorkflowID)
+		baseName := toPythonFuncName(wf.WorkflowID)
+		funcName := baseName
+		for n := 2; usedFuncNames[funcName]; n++ {
+			funcName = fmt.Sprintf("%s_%d", baseName, n)
+		}
+		usedFuncNames[funcName] = true
 		docstring := workflowDocstringWithAuth(wf, classified)
 		params := buildAllParams(classified.RegularInputs, classified.CredentialInputs)
 		inputDict := buildAllInputDict(classified.RegularInputs, classified.CredentialInputs)
@@ -132,6 +140,51 @@ func buildToolsBlock(spec *ArazzoSpec, workflowClassified map[string]ClassifiedI
 		b.WriteString("        return f\"Workflow Error: {str(e)}\"\n")
 	}
 	return b.String()
+}
+
+// pythonKeywords lists the reserved words that cannot be used as a Python
+// function name. Values are lowercase because toPythonFuncName lowercases first.
+var pythonKeywords = map[string]bool{
+	"and": true, "as": true, "assert": true, "async": true, "await": true,
+	"break": true, "class": true, "continue": true, "def": true, "del": true,
+	"elif": true, "else": true, "except": true, "false": true, "finally": true,
+	"for": true, "from": true, "global": true, "if": true, "import": true,
+	"in": true, "is": true, "lambda": true, "none": true, "nonlocal": true,
+	"not": true, "or": true, "pass": true, "raise": true, "return": true,
+	"true": true, "try": true, "while": true, "with": true, "yield": true,
+}
+
+// toPythonFuncName converts an Arazzo workflowId into a valid snake_case Python
+// function name. A workflowId may legally contain characters that are not valid
+// in a Python identifier — most commonly a hyphen, as in "place-order" — so every
+// rune that is not a letter or digit is turned into an underscore before the
+// camelCase split, and the result is guarded against the remaining ways an
+// identifier can be invalid: empty, leading digit, or a reserved keyword.
+func toPythonFuncName(workflowID string) string {
+	var replaced strings.Builder
+	for _, r := range workflowID {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			replaced.WriteRune(r)
+		} else {
+			replaced.WriteRune('_')
+		}
+	}
+
+	name := camelToSnake(replaced.String())
+
+	// Collapse runs of underscores introduced above and trim the edges.
+	for strings.Contains(name, "__") {
+		name = strings.ReplaceAll(name, "__", "_")
+	}
+	name = strings.Trim(name, "_")
+
+	if name == "" {
+		return "workflow"
+	}
+	if unicode.IsDigit([]rune(name)[0]) || pythonKeywords[name] {
+		return "workflow_" + name
+	}
+	return name
 }
 
 // camelToSnake converts a camelCase or PascalCase string to snake_case.
