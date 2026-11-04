@@ -110,3 +110,108 @@ func TestBuildToolsBlockDeduplicatesFuncNames(t *testing.T) {
 		}
 	}
 }
+
+func TestToPythonParamName(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"kebab case", "Internal-Key", "internalKey"},
+		{"snake case", "api_key", "apiKey"},
+		{"spaces", "user name", "userName"},
+		{"plain", "name", "name"},
+		{"empty", "", "param"},
+		{"punctuation only", "---", "param"},
+		{"leading digit", "2fa-code", "param_2faCode"},
+		{"digits only", "123", "param_123"},
+		{"python keyword", "class", "param_class"},
+		{"python keyword after camelizing", "Import", "param_import"},
+		{"keyword prefix is fine", "classId", "classId"},
+		{"digit not leading is fine", "code2fa", "code2fa"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := toPythonParamName(tt.input); got != tt.want {
+				t.Errorf("toPythonParamName(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestToPythonParamNameProducesValidIdentifiers guards the property that
+// matters: every result must be usable as a Python parameter name.
+func TestToPythonParamNameProducesValidIdentifiers(t *testing.T) {
+	inputs := []string{
+		"2fa-code", "123", "class", "def", "return", "import", "", "---",
+		"Internal-Key", "user name", "a.b/c:d", "9lives", "for",
+	}
+
+	for _, in := range inputs {
+		got := toPythonParamName(in)
+		if got == "" {
+			t.Errorf("toPythonParamName(%q) returned an empty name", in)
+			continue
+		}
+		if pythonKeywords[got] {
+			t.Errorf("toPythonParamName(%q) = %q, which is a Python keyword", in, got)
+		}
+		for i, r := range got {
+			isValid := r == '_' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
+			if !isValid {
+				t.Errorf("toPythonParamName(%q) = %q, invalid rune %q at %d", in, got, r, i)
+			}
+			if i == 0 && r >= '0' && r <= '9' {
+				t.Errorf("toPythonParamName(%q) = %q, starts with a digit", in, got)
+			}
+		}
+	}
+}
+
+// TestGenerateServerCodeLeadingDigitAndKeyword reproduces issue #9: inputs
+// whose names start with a digit or are Python keywords must not be emitted
+// as raw parameter names, and the original Arazzo names must still be passed
+// through to execute_workflow.
+func TestGenerateServerCodeLeadingDigitAndKeyword(t *testing.T) {
+	spec := &ArazzoSpec{
+		Arazzo: "1.0.1",
+		Info:   ArazzoInfo{Title: "Test", Version: "1.0.0"},
+		Workflows: []Workflow{
+			{
+				WorkflowID: "do-auth",
+				Inputs: &WorkflowInput{
+					Type: "object",
+					Properties: map[string]InputProperty{
+						"2fa-code": {Type: "string"},
+						"class":    {Type: "string"},
+						"name":     {Type: "string"},
+					},
+				},
+			},
+		},
+	}
+
+	code, err := GenerateServerCode(spec, "test.arazzo.yaml", 8080)
+	if err != nil {
+		t.Fatalf("GenerateServerCode returned error: %v", err)
+	}
+
+	// Parameters appear as "(x: str" or ", x: str" in the def signature.
+	for _, bad := range []string{"(2faCode:", ", 2faCode:", "(class:", ", class:"} {
+		if strings.Contains(code, bad) {
+			t.Errorf("generated code still contains invalid parameter %q", bad)
+		}
+	}
+	for _, want := range []string{
+		"param_2faCode: str",
+		"param_class: str",
+		"name: str",
+		`"2fa-code": param_2faCode`,
+		`"class": param_class`,
+	} {
+		if !strings.Contains(code, want) {
+			t.Errorf("generated code missing %q", want)
+		}
+	}
+}
