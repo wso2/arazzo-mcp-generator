@@ -310,6 +310,13 @@ func toPythonParamName(name string) string {
 	if result == "" {
 		result = "param"
 	}
+	// Mirror toPythonFuncName: a Python identifier cannot start with a digit
+	// or be a reserved keyword, so prefix such names to keep the generated
+	// function signature valid (e.g. "2fa-code" → "param_2faCode",
+	// "class" → "param_class").
+	if unicode.IsDigit([]rune(result)[0]) || pythonKeywords[result] {
+		result = "param_" + result
+	}
 	return result
 }
 
